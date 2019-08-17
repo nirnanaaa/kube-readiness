@@ -19,8 +19,12 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	"github.com/nirnanaaa/kube-readiness/controllers"
+	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
+	corev1 "k8s.io/api/core/v1"
+	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -39,6 +43,8 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = networkingv1beta1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = extensionsv1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -62,14 +68,48 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.IngressReconciler{
+	controller := readiness.Controller{
+		Log:            ctrl.Log.WithName("controllers").WithName("Readiness"),
+		EndpointPodMap: make(readiness.EndpointPodMap),
+		IngressSet:     make(readiness.IngressSet),
+	}
+
+	if err = (&controllers.PodReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Ingress"),
+		Log:    ctrl.Log.WithName("controllers").WithName("Pod"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Pod")
+		os.Exit(1)
+	}
+
+	if err = (&controllers.ServiceReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Service"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Service")
+		os.Exit(1)
+	}
+	if err = (&controllers.IngressReconciler{
+		Client:     mgr.GetClient(),
+		IngressSet: &controller.IngressSet,
+		Log:        ctrl.Log.WithName("controllers").WithName("Ingress"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Ingress")
 		os.Exit(1)
 	}
+	if err = (&controllers.EndpointsReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Endpoints"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Endpoints")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
+
+	setupLog.Info("starting external controllers")
+	closeCh := make(chan bool)
+	go controller.RunLoop(5*time.Second, closeCh)
+	defer func() { closeCh <- true }()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
