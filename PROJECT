@@ -1,0 +1,3 @@
+version: "2"
+domain: readiness.io
+repo: github.com/nirnanaaa/kube-readiness
