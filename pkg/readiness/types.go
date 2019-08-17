@@ -4,7 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// IngressEndpoint contains the essential information for each network endpoint in a NEG
+// IngressEndpoint contains the essential information for each pod in a endpoint group.
 type IngressEndpoint struct {
 	IP   string
 	Port string
