@@ -30,6 +30,7 @@ fi
 
 # Global variables
 
+NAMESPACE=${NAMESPACE:-default}
 AWS_PROFILE=${AWS_PROFILE:-default}
 CLUSTER_NAME=${CLUSTER_NAME:-kube-readiness}
 KUBECONFIG="./kube-config-$CLUSTER_NAME"
@@ -39,7 +40,7 @@ TG_ARN=""
 # Always clean up the echo server deployment and remove the kubeconfig file
 
 function finish {
-  kubectl delete --ignore-not-found=true -f ./echoserver/echoserver-deployment.yaml > /dev/null
+  kubectl -n $NAMESPACE delete --ignore-not-found=true -f ./echoserver/echoserver-deployment.yaml > /dev/null
 
   rm -f $KUBECONFIG
 }
@@ -57,11 +58,11 @@ kubectl apply -f ./alb-ingress-controller > /dev/null
 
 # 3a. Deploy the echoserver ingress
 
-kubectl apply -f ./echoserver/echoserver-ingress.yaml > /dev/null
+kubectl apply -n $NAMESPACE -f ./echoserver/echoserver-ingress.yaml > /dev/null
 
 echo -n "Waiting for loadbalancer DNS location to become available"
 while [[ -z $ECHOSERVER_LB_DNS ]]; do
-  ECHOSERVER_LB_DNS=$(kubectl get ingress -ojsonpath="{.items[*].status.loadBalancer.ingress[*].hostname}")
+  ECHOSERVER_LB_DNS=$(aws --region=eu-west-1 elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName,'$NAMESPACE') && contains(LoadBalancerName 'echoserver')].DNSName" --output text)
   printf '.'
   sleep 2
 done
@@ -69,29 +70,36 @@ done
 # Get ingress loadbalancer ARN
 LB_ARN=$(aws --region=eu-west-1 elbv2 describe-load-balancers --query "LoadBalancers[?DNSName==\`$ECHOSERVER_LB_DNS\`].LoadBalancerArn" --output text)
 
-# Get ingress target group ARN
-echo
-echo -n "Waiting for targetgroup"
-while [[ -z $TG_ARN ]]; do
-  TG_ARN=$(aws --region=eu-west-1 elbv2 describe-target-groups --query "TargetGroups[?contains(LoadBalancerArns, '$LB_ARN')].TargetGroupArn" --output text)
-  printf '.'
-  sleep 2
-done
-
-# Make sure the echoserver deployment has been deleted
-kubectl delete --ignore-not-found=true -f ./echoserver/echoserver-deployment.yaml > /dev/null
-
-# Wait for an empty targetgroup
-echo
-echo -n "Waiting for all loadbalancer targets to deregister"
-until [[ -z $(aws --region=eu-west-1 elbv2 describe-target-health --target-group-arn $TG_ARN --output text --query "TargetHealthDescriptions") ]]; do
-    printf '.'
-    sleep 2
-done
-
 # 3b. Deploy the echoserver
 
-kubectl apply -f ./echoserver > /dev/null
+# Check for previous deployment of echoserver and clean it up
+if [[ ! -z $(kubectl get deployment --ignore-not-found echoserver) ]]; then
+
+  # Make sure the echoserver deployment has been deleted
+  kubectl -n $NAMESPACE delete --ignore-not-found=true -f ./echoserver/echoserver-deployment.yaml > /dev/null
+
+  # Get ingress target group ARN
+  echo
+  echo -n "Waiting for targetgroup"
+  while [[ -z $TG_ARN ]]; do
+    TG_ARN=$(aws --region=eu-west-1 elbv2 describe-target-groups --query "TargetGroups[?contains(LoadBalancerArns, '$LB_ARN')].TargetGroupArn" --output text)
+    printf '.'
+    sleep 2
+  done
+
+  # Wait for an empty targetgroup
+  echo
+  echo -n "Waiting for all loadbalancer targets to deregister"
+  until [[ -z $(aws --region=eu-west-1 elbv2 describe-target-health --target-group-arn $TG_ARN --output text --query "TargetHealthDescriptions") ]]; do
+      printf '.'
+      sleep 2
+  done
+
+fi
+
+# Deploy echoserver
+
+kubectl -n $NAMESPACE apply -f ./echoserver > /dev/null
 
 # Wait for successful loadbalancer response
 echo
@@ -104,7 +112,7 @@ done
 # 4. Perform rolling upgrade of the echoserver (1.4 -> 1.10)
 echo
 echo "Executing rolling upgrade"
-sed "s/1.4/1.10/g" ./echoserver/echoserver-deployment.yaml | kubectl apply -f - > /dev/null
+sed "s/1.4/1.10/g" ./echoserver/echoserver-deployment.yaml | kubectl apply -n $NAMESPACE -f - > /dev/null
 
 # 5. Start the k6 load test
 echo "Starting load test"
