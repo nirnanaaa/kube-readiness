@@ -7,12 +7,10 @@ jobs:
     environment:
       GO111MODULE: "on"
     docker:
-      - image: circleci/golang:1.12
+      - image: iverberk/kube-readiness-ci:1
     working_directory: /go/src/github.com/nirnanaaa/kube-readiness
     steps:
-      - run: curl -sL# https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.0.0-rc.0/kubebuilder_2.0.0-rc.0_linux_amd64.tar.gz | tar -xz -C /tmp
-      - run: sudo mkdir -p /usr/local/kubebuilder/
-      - run: sudo mv /tmp/kubebuilder_2.0.0-rc.0_linux_amd64/bin /usr/local/kubebuilder/bin
+      - run: export PATH="$PATH:/usr/local/kubebuilder/bin"
       - checkout
       - run: make test
       - setup_remote_docker:   # (2)
