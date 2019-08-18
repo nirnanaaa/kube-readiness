@@ -17,11 +17,8 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
-
 	"github.com/go-logr/logr"
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,19 +36,8 @@ type IngressReconciler struct {
 // +kubebuilder:rbac:groups=extensions,resources=ingresses/status,verbs=get;update;patch
 
 func (r *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+	// ctx := context.Background()
 	_ = r.Log.WithValues("ingress", req.NamespacedName)
-	m := &extensionsv1beta1.Ingress{}
-	if err := r.Client.Get(ctx, req.NamespacedName, m); err != nil {
-		if apierrors.IsNotFound(err) {
-			r.ReadinessController.IngressSet.Remove(req.NamespacedName)
-			// Object not found, return.  Created objects are automatically garbage collected.
-			// For additional cleanup logic use finalizers.
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return ctrl.Result{}, err
-	}
 	r.ReadinessController.SyncIngress(req.NamespacedName)
 
 	// TODO:
