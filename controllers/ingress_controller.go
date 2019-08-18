@@ -31,8 +31,8 @@ import (
 // IngressReconciler reconciles a Ingress object
 type IngressReconciler struct {
 	client.Client
-	Log        logr.Logger
-	IngressSet *readiness.IngressSet
+	Log                 logr.Logger
+	ReadinessController *readiness.Controller
 }
 
 // +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
@@ -44,7 +44,7 @@ func (r *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	m := &extensionsv1beta1.Ingress{}
 	if err := r.Client.Get(ctx, req.NamespacedName, m); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.IngressSet.Remove(req.NamespacedName)
+			r.ReadinessController.IngressSet.Remove(req.NamespacedName)
 			// Object not found, return.  Created objects are automatically garbage collected.
 			// For additional cleanup logic use finalizers.
 			return ctrl.Result{}, nil
@@ -52,7 +52,7 @@ func (r *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
 	}
-	_ = r.IngressSet.Ensure(req.NamespacedName)
+	r.ReadinessController.SyncIngress(req.NamespacedName)
 
 	// TODO:
 	// - get service for ingress

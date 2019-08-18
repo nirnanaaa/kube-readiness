@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"os"
-	"time"
 
 	"github.com/nirnanaaa/kube-readiness/controllers"
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
@@ -68,11 +67,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	controller := readiness.Controller{
-		Log:            ctrl.Log.WithName("controllers").WithName("Readiness"),
-		EndpointPodMap: make(readiness.EndpointPodMap),
-		IngressSet:     make(readiness.IngressSet),
-	}
+	controller := readiness.NewController()
+	controller.Log = ctrl.Log.WithName("controllers").WithName("Readiness")
 
 	if err = (&controllers.PodReconciler{
 		Client: mgr.GetClient(),
@@ -90,9 +86,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.IngressReconciler{
-		Client:     mgr.GetClient(),
-		IngressSet: &controller.IngressSet,
-		Log:        ctrl.Log.WithName("controllers").WithName("Ingress"),
+		Client:              mgr.GetClient(),
+		ReadinessController: controller,
+		Log:                 ctrl.Log.WithName("controllers").WithName("Ingress"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Ingress")
 		os.Exit(1)
@@ -107,9 +103,9 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting external controllers")
-	closeCh := make(chan bool)
-	go controller.RunLoop(5*time.Second, closeCh)
-	defer func() { closeCh <- true }()
+	closeCh := make(chan struct{})
+	go controller.Run(closeCh)
+	defer func() { closeCh <- struct{}{} }()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
