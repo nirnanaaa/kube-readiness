@@ -1,0 +1,22 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: __CLUSTER_NAME__    # Replace before applying with eksctl
+  region: eu-west-1
+
+nodeGroups:
+  - name: ng-1
+    labels:
+      role: workers
+    instanceType: t3.medium
+    desiredCapacity: 1
+    privateNetworking: true
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      withAddonPolicies:
+        albIngress: true
