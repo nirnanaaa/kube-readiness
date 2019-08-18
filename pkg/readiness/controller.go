@@ -5,9 +5,11 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/nirnanaaa/kube-readiness/pkg/cloud/aws"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type Controller struct {
@@ -15,13 +17,16 @@ type Controller struct {
 	EndpointPodMap EndpointPodMap
 	IngressSet     IngressSet
 	queue          workqueue.RateLimitingInterface
+	CloudSDK       aws.SDK
+	KubeSDK        client.Client
 }
 
-func NewController() *Controller {
+func NewController(kube client.Client) *Controller {
 	return &Controller{
 		queue:          workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		EndpointPodMap: make(EndpointPodMap),
 		IngressSet:     make(IngressSet),
+		KubeSDK:        kube,
 	}
 }
 
@@ -55,5 +60,7 @@ func (r *Controller) SyncIngress(ing types.NamespacedName) {
 func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) {
 	log := r.Log.WithValues("trigger", "scheduled")
 	log.Info("received for ingress")
+
+	// r.CloudSDK.FetchLoadBalancer()
 	_ = r.IngressSet.Ensure(namespacedName)
 }

@@ -67,7 +67,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	controller := readiness.NewController()
+	controller := readiness.NewController(mgr.GetClient())
 	controller.Log = ctrl.Log.WithName("controllers").WithName("Readiness")
 
 	if err = (&controllers.PodReconciler{

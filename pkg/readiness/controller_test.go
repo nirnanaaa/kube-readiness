@@ -1,8 +1,8 @@
 package readiness
 
 import (
-	"fmt"
 	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,7 +15,7 @@ var _ = Describe("Readiness Types", func() {
 	var controller *Controller
 	var stopCh chan struct{}
 	BeforeEach(func() {
-		controller = NewController()
+		controller = NewController(k8sClient)
 		controller.Log = ctrl.Log.WithName("controllers").WithName("Readiness")
 		stopCh = make(chan struct{})
 		go controller.Run(stopCh)
@@ -25,12 +25,11 @@ var _ = Describe("Readiness Types", func() {
 		close(stopCh)
 	})
 
-
 	Context("Controller", func() {
 		It("should add an ingress to check", func() {
 			name := types.NamespacedName{
 				Namespace: "test-system",
-				Name: "test",
+				Name:      "test",
 			}
 			controller.SyncIngress(name)
 			Eventually(func() *IngressEndpointSet {
