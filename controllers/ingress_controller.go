@@ -36,17 +36,8 @@ type IngressReconciler struct {
 // +kubebuilder:rbac:groups=extensions,resources=ingresses/status,verbs=get;update;patch
 
 func (r *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	// ctx := context.Background()
 	_ = r.Log.WithValues("ingress", req.NamespacedName)
 	r.ReadinessController.SyncIngress(req.NamespacedName)
-
-	// TODO:
-	// - get service for ingress
-	// - get pods for service
-	// - add to ingress set
-
-	// your logic here
-
 	return ctrl.Result{}, nil
 }
 

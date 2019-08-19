@@ -1,13 +1,15 @@
 package readiness
 
 import (
+	"errors"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 )
 
-func hasHostname(ingress *extensionsv1beta1.Ingress) bool {
+func extractHostname(ingress *extensionsv1beta1.Ingress) (string, error) {
 	lbStatus := ingress.Status.LoadBalancer.Ingress
 	if len(lbStatus) < 1 {
-		return false
+		return "", errors.New("ingress not ready, yet. requeue")
 	}
-	return true
+	//TODO: ingress.Status.LoadBalancer.Ingress is a list, how many can we have? which one to use?
+	return ingress.Status.LoadBalancer.Ingress[0].Hostname, nil
 }

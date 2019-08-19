@@ -71,7 +71,7 @@ var _ = Describe("Readiness Types", func() {
 			Expect(err).To(BeNil())
 
 			controller.SyncIngress(name)
-			Eventually(func() *IngressEndpointSet {
+			Eventually(func() IngressData {
 				return controller.IngressSet[name]
 			}, timeout, interval).ShouldNot(BeNil())
 		})

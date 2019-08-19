@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	"github.com/nirnanaaa/kube-readiness/controllers"
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
@@ -50,6 +51,8 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	//TODO: What is the proper time to resync all? Do we want to use same resync intervall for all?
+	syncPeriod := 1 * time.Minute
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
@@ -61,6 +64,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		SyncPeriod:         &syncPeriod,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

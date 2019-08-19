@@ -14,11 +14,20 @@ type IngressEndpoint struct {
 type EndpointPodMap map[IngressEndpoint]types.NamespacedName
 
 // IngressSet maps an ingress to endpoints
-type IngressSet map[types.NamespacedName]*IngressEndpointSet
+type IngressSet map[types.NamespacedName]IngressData
 
-func (i IngressSet) Ensure(name types.NamespacedName) *IngressEndpointSet {
+type IngressData struct {
+	IngressEndpoints *IngressEndpointSet
+	LoadBalancer     LoadBalancerData
+}
+
+type LoadBalancerData struct {
+	Hostname string
+}
+
+func (i IngressSet) Ensure(name types.NamespacedName) IngressData {
 	if _, ok := i[name]; !ok {
-		i[name] = &IngressEndpointSet{}
+		i[name] = IngressData{&IngressEndpointSet{}, LoadBalancerData{}}
 	}
 	return i[name]
 }

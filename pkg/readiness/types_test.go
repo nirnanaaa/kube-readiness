@@ -17,18 +17,18 @@ var _ = Describe("Readiness Types", func() {
 				Namespace: "some-system",
 			}
 			endpointMap := igMap.Ensure(ingress)
-			Expect(endpointMap.Len()).Should(Equal(0))
+			Expect(endpointMap.IngressEndpoints.Len()).Should(Equal(0))
 			By("adding an ingress")
 			ep := IngressEndpoint{
 				IP:   "10.10.0.1",
 				Port: "80",
 				Node: "10.10.0.0",
 			}
-			endpointMap.Insert(ep)
-			Expect(endpointMap.Len()).Should(Equal(1))
+			endpointMap.IngressEndpoints.Insert(ep)
+			Expect(endpointMap.IngressEndpoints.Len()).Should(Equal(1))
 			By("removing the ingress")
-			endpointMap.Delete(ep)
-			Expect(endpointMap.Len()).Should(Equal(0))
+			endpointMap.IngressEndpoints.Delete(ep)
+			Expect(endpointMap.IngressEndpoints.Len()).Should(Equal(0))
 		})
 	})
 })

@@ -3,6 +3,7 @@ package readiness
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -85,7 +86,7 @@ func (r *Controller) SyncIngress(ing types.NamespacedName) {
 func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (err error) {
 	log := r.Log.WithValues("trigger", "scheduled")
 	ctx := context.Background()
-	log.Info("received for ingress")
+	log.Info("received ingress update")
 	ingress := &extensionsv1beta1.Ingress{}
 	if err := r.KubeSDK.Get(ctx, namespacedName, ingress); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -96,11 +97,20 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 		// Error reading the object - requeue the request.
 		return err
 	}
-	if !hasHostname(ingress) {
+
+	ingressData := r.IngressSet.Ensure(namespacedName)
+
+	hostname, err := extractHostname(ingress)
+	if err != nil {
 		return errors.New("ingress not ready, yet. requeue")
 	}
+	ingressData.LoadBalancer.Hostname = hostname
+
+	log.Info(fmt.Sprintf("all ingress information we store: %v", ingressData))
+
+	//TODO: Find endpoints and store them in the SET
+
 	log.Info("ensuring ingress is up to date with aws api")
-	// r.CloudSDK.FetchLoadBalancer()
-	_ = r.IngressSet.Ensure(namespacedName)
+	//TODO: Find ARN, find TargetGroups for ALB using ARN, store them in the SET
 	return
 }
