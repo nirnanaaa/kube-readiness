@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -12,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 )
 
 var backend = &extensionsv1beta1.IngressBackend{

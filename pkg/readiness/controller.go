@@ -31,6 +31,8 @@ type Controller struct {
 }
 
 func NewController(kube client.Client) *Controller {
+	//TODO: When things fail NewRateLimitingQueue resends rather quickly, what do we do about that?
+	//Potentialy if it sends to fast and alb-ingress-controller is to slow it might miss the info of hostname
 	return &Controller{
 		queue:          workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		EndpointPodMap: make(EndpointPodMap),
@@ -106,15 +108,19 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	}
 	ingressData.LoadBalancer.Hostname = hostname
 
-	log.Info(fmt.Sprintf("all ingress information we store: %v", ingressData))
-
 	//TODO: Find endpoints and store them in the SET
 
 	log.Info("ensuring ingress is up to date with aws api")
-	//TODO: Find ARN, find TargetGroups for ALB using ARN, store them in the SET
-	_, err = r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
+	endpoints, err := r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
 	if err != nil {
+		log.Error(err, "error fetching info from aws sdk")
 		return errors.New("error fetching info from aws sdk")
+	}
+	ingressData.LoadBalancer.Endpoints = endpoints
+
+	log.Info(fmt.Sprintf("received Ingress [%s] with hostname [%s], containing following LoadBalancer endpoints", namespacedName.String(), hostname))
+	for _, endpoint := range endpoints {
+		log.Info(fmt.Sprintf("endpoint name [%s]", endpoint.Name))
 	}
 	return
 }

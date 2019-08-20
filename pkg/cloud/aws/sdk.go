@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"errors"
+	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -40,7 +41,8 @@ func NewCloudSDK(region string, assumeRoleArn string) (sdk cloud.SDK, err error)
 	return sdk, nil
 }
 
-func (c *Cloud) GetEndpointGroupsByHostname(ctx context.Context, name string) (groups []*cloud.EndpointGroup, err error) {
+func (c *Cloud) GetEndpointGroupsByHostname(ctx context.Context, hostname string) (groups []*cloud.EndpointGroup, err error) {
+	name := getNameFromHostname(hostname)
 	lb, err := c.GetLoadBalancerByHostname(ctx, name)
 	if err != nil {
 		return nil, err
@@ -102,4 +104,15 @@ func (c *Cloud) describeTargetGroupsHelper(input *elbv2.DescribeTargetGroupsInpu
 		return true
 	})
 	return result, err
+}
+
+//TODO: is there no otherway to figure out the name from namespace? We can't use query as we do with cli because we then need to fetch all ALB's
+func getNameFromHostname(hostname string) string {
+	//Internal looks something like this internal-aefc3232-ab-prometheus-d4e5-1883083075.eu-west-1.elb.amazonaws.com
+	left := strings.Split(hostname, ".")[0]
+	//String internal-
+	noPrefix := strings.ReplaceAll(left, "internal-", "")
+	//Remove AWS generated id
+	tmp := strings.Split(noPrefix, "-")
+	return strings.ReplaceAll(noPrefix, "-"+tmp[len(tmp)-1], "")
 }

@@ -1,6 +1,7 @@
 package readiness
 
 import (
+	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -22,7 +23,9 @@ type IngressData struct {
 }
 
 type LoadBalancerData struct {
-	Hostname string
+	//TODO: Should we store the hostname or the name(arn) of the ALB here?
+	Hostname  string
+	Endpoints []*cloud.EndpointGroup
 }
 
 func (i IngressSet) Ensure(name types.NamespacedName) IngressData {
