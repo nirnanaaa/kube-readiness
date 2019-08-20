@@ -9,7 +9,6 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
-	"github.com/nirnanaaa/kube-readiness/pkg/readiness/alb"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -246,41 +245,41 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 		// Error reading the object - requeue the request.
 		return err
 	}
-
-	//Check if pod has ReadinessGate set
-	for _, rs := range pod.Spec.ReadinessGates {
-		if alb.ReadinessGate == rs.ConditionType {
-			log.Info(fmt.Sprintf("pod [%s] has ReadinessGates set", namespacedName.String()))
-
-			for _, condition := range pod.Status.Conditions {
-				if condition.Reason == "ReadinessGatesNotReady" && condition.Status == "False" {
-					ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
-					if len(ingress.IngressEndpoints) == 0 {
-						return errors.New("pod does not have ingress yet")
-					}
-
-					//TODO: We need to pass the port as well (store it as well in IngressSet)
-					healthy, err := r.CloudSDK.IsEndpointHealthy(context.Background(), ingress.LoadBalancer.Endpoints, pod.Status.PodIP)
-					if err != nil {
-						log.Error(err, "something was wrong when gathering target health")
-						return err
-					}
-					status, _ := readinessConditionStatus(pod)
-					if healthy {
-						status.Status = corev1.ConditionTrue
-						setReadinessConditionStatus(pod, status)
-						if err := patchPodStatus(r.KubeSDK, ctx, pod); err != nil {
-							return err
-						}
-						//TODO: on healthy set Annotation to ready
-						log.Info("Please set me to TRUE!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-						return nil
-					}
-					return errors.New("pod not healthy yet")
-				}
-			}
-		}
+	ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
+	if len(ingress.IngressEndpoints) == 0 {
+		return errors.New("pod does not have ingress yet")
 	}
+
+	//TODO: We need to pass the port as well (store it as well in IngressSet)
+	healthy, err := r.CloudSDK.IsEndpointHealthy(context.Background(), ingress.LoadBalancer.Endpoints, pod.Status.PodIP)
+	if err != nil {
+		log.Error(err, "something was wrong when gathering target health")
+		return err
+	}
+	status, _ := readinessConditionStatus(pod)
+	if healthy {
+		status.Status = corev1.ConditionTrue
+		setReadinessConditionStatus(pod, status)
+		if err := patchPodStatus(r.KubeSDK, ctx, pod); err != nil {
+			return err
+		}
+		//TODO: on healthy set Annotation to ready
+		log.Info("Please set me to TRUE!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		return nil
+	}
+	return errors.New("pod not healthy yet")
+	//Check if pod has ReadinessGate set
+	// for _, rs := range pod.Spec.ReadinessGates {
+	// 	if alb.ReadinessGate == rs.ConditionType {
+	// 		log.Info(fmt.Sprintf("pod [%s] has ReadinessGates set", namespacedName.String()))
+
+	// 		for _, condition := range pod.Status.Conditions {
+	// 			if condition.Reason == "ReadinessGatesNotReady" && condition.Status == "False" {
+
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	return nil
 }
