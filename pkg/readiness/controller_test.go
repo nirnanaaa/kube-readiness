@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 )
 
 var backend = &extensionsv1beta1.IngressBackend{
@@ -47,6 +48,7 @@ var _ = Describe("Readiness Types", func() {
 	BeforeEach(func() {
 		controller = NewController(k8sClient)
 		controller.Log = ctrl.Log.WithName("controllers").WithName("Readiness")
+		controller.CloudSDK = &cloud.Fake{}
 		stopCh = make(chan struct{})
 		go controller.Run(stopCh)
 	})

@@ -112,5 +112,9 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 
 	log.Info("ensuring ingress is up to date with aws api")
 	//TODO: Find ARN, find TargetGroups for ALB using ARN, store them in the SET
+	_, err = r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
+	if err != nil {
+		return errors.New("error fetching info from aws sdk")
+	}
 	return
 }
