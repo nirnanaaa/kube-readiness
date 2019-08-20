@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
@@ -115,4 +116,29 @@ func getNameFromHostname(hostname string) string {
 	//Remove AWS generated id
 	tmp := strings.Split(noPrefix, "-")
 	return strings.ReplaceAll(noPrefix, "-"+tmp[len(tmp)-1], "")
+}
+
+func (c *Cloud) IsEndpointHealthy(ctx context.Context, groups []cloud.EndpointGroup, name string) (bool, error) {
+	for _, endpoint := range groups {
+		out, err := c.elbv2.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
+			TargetGroupArn: awssdk.String(endpoint.Name),
+			Targets: []*elbv2.TargetDescription{
+				{
+					Id:   awssdk.String(name),
+					Port: awssdk.Int64(3000), //TODO this filed is not optional!
+				},
+			},
+		})
+		if err != nil {
+			return false, err
+		}
+		if len(out.TargetHealthDescriptions) != 1 {
+			return false, errors.New(fmt.Sprintf("expecting only one health target but got [%v]", len(out.TargetHealthDescriptions)))
+		}
+		if *out.TargetHealthDescriptions[0].TargetHealth.State == "healthy" {
+			return true, nil
+		}
+		return false, nil
+	}
+	return false, nil
 }

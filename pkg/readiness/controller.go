@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
+	"github.com/nirnanaaa/kube-readiness/pkg/readiness/alb"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +22,11 @@ import (
 const (
 	maxRetries = 15
 )
+
+type Message struct {
+	Type           string
+	NamespacedName types.NamespacedName
+}
 
 type Controller struct {
 	Log            logr.Logger
@@ -59,29 +65,45 @@ func (r *Controller) processNextWorkItem() bool {
 		return false
 	}
 	defer r.queue.Done(key)
-	namespacedKey := key.(types.NamespacedName)
-	err := r.syncIngressInternal(namespacedKey)
-	r.handleErr(err, namespacedKey)
+	message := key.(Message)
+	if message.Type == "ingress" {
+		err := r.syncIngressInternal(message.NamespacedName)
+		r.handleErr(err, message)
+	} else {
+		err := r.syncPodInternal(message.NamespacedName)
+		r.handleErr(err, message)
+	}
+
 	return true
 }
 
 // handleErr handles errors from syncIngress
-func (r *Controller) handleErr(err error, key types.NamespacedName) {
+func (r *Controller) handleErr(err error, msg Message) {
 	if err == nil {
-		r.queue.Forget(key)
+		r.queue.Forget(msg)
 		return
 	}
-	r.Log.Info("received an error for ingress", "name", key.String(), "error", err.Error())
+	r.Log.Info("received an error", "name", msg.NamespacedName.String(), "error", err.Error())
 
-	if r.queue.NumRequeues(key) < maxRetries {
-		r.queue.AddRateLimited(key)
+	if r.queue.NumRequeues(msg) < maxRetries {
+		r.queue.AddRateLimited(msg)
 		return
 	}
-	r.queue.Forget(key)
+	r.queue.Forget(msg)
 }
 
 func (r *Controller) SyncIngress(ing types.NamespacedName) {
-	r.queue.Add(ing)
+	r.queue.Add(Message{
+		Type:           "ingress",
+		NamespacedName: ing,
+	})
+}
+
+func (r *Controller) SyncPod(pod types.NamespacedName) {
+	r.queue.Add(Message{
+		Type:           "pod",
+		NamespacedName: pod,
+	})
 }
 
 // query AWS for that ingress with namespacedName %s, processing is done asynchronously
@@ -107,7 +129,6 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	if err != nil {
 		return errors.New("ingress not ready, yet. requeue")
 	}
-	ingressData.LoadBalancer.Hostname = hostname
 
 	//Find all services for Ingress
 	if len(ingress.Spec.Rules) < 1 {
@@ -129,7 +150,7 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 			if err := r.KubeSDK.Get(ctx, svcKey, service); err != nil {
 				if apierrors.IsNotFound(err) {
 					log.Info("could not find service: " + svcKey.String())
-					return errors.New("retry service whas not available")
+					return errors.New("retry service was not available")
 				}
 				// Error reading the object - requeue the request.
 				return err
@@ -137,12 +158,16 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 			//Find the endpoints for the service
 			eps := &corev1.Endpoints{}
 			if err := r.KubeSDK.Get(ctx, svcKey, eps); err != nil {
-				log.Error(err, "something wrong happen when fetching Endpoint")
+				log.Error(err, "something wrong happend when fetching Endpoint")
 				return err
 			}
 			for _, sub := range eps.Subsets {
 				//TODO there are multiple ports which one to use?
-				//Only check the NotReadyAddresses only
+				for _, add := range sub.Addresses {
+					ingressData.IngressEndpoints.Insert(IngressEndpoint{
+						IP: add.IP,
+					})
+				}
 				for _, add := range sub.NotReadyAddresses {
 					ingressData.IngressEndpoints.Insert(IngressEndpoint{
 						IP: add.IP,
@@ -159,7 +184,14 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 		log.Error(err, "error fetching info from aws sdk")
 		return errors.New("error fetching info from aws sdk")
 	}
-	ingressData.LoadBalancer.Endpoints = endpoints
+	var tmp []cloud.EndpointGroup
+	for _, v := range endpoints {
+		tmp = append(tmp, *v)
+	}
+	ingressData.LoadBalancer.Endpoints = tmp
+	ingressData.LoadBalancer.Hostname = hostname
+
+	r.IngressSet[namespacedName] = ingressData
 
 	//TODO: how do we handle host mode vs ip mode
 
@@ -167,9 +199,59 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	for _, endpoint := range ingressData.LoadBalancer.Endpoints {
 		log.Info(fmt.Sprintf("LoadBalancer endpoint name [%s]", endpoint.Name))
 	}
-	for endpoint := range *ingressData.IngressEndpoints {
+	for endpoint := range ingressData.IngressEndpoints {
 		log.Info(fmt.Sprintf("Ingress endpoint name [%s]", endpoint.IP))
 	}
 
+	fmt.Println("zzzzzzzzzzzzzzzzzzz")
+	fmt.Println(r.IngressSet)
+
 	return
+}
+
+func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err error) {
+
+	log := r.Log.WithValues("trigger", "scheduled")
+	ctx := context.Background()
+	log.Info("received pod update")
+	pod := &corev1.Pod{}
+	if err := r.KubeSDK.Get(ctx, namespacedName, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("pod not found, skipping")
+			return nil
+		}
+		// Error reading the object - requeue the request.
+		return err
+	}
+
+	//Check if pod has ReadinessGate set
+	for _, rs := range pod.Spec.ReadinessGates {
+		if alb.ReadinessGate == rs.ConditionType {
+			log.Info(fmt.Sprintf("pod [%s] has ReadinessGates set", namespacedName.String()))
+
+			for _, condition := range pod.Status.Conditions {
+				if condition.Reason == "ReadinessGatesNotReady" && condition.Status == "False" {
+					ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
+					if len(ingress.IngressEndpoints) == 0 {
+						return errors.New("pod does not have ingress yet")
+					}
+
+					//TODO: We need to pass the port as well (store it as well in IngressSet)
+					healthy, err := r.CloudSDK.IsEndpointHealthy(context.Background(), ingress.LoadBalancer.Endpoints, pod.Status.PodIP)
+					if err != nil {
+						log.Error(err, "something was wrong when gathering target health")
+						return err
+					}
+					if healthy {
+						//TODO: on healthy set Annotation to ready
+						log.Info("Please set me to TRUE!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+						return nil
+					}
+					return errors.New("pod not healthy yet")
+				}
+			}
+		}
+	}
+
+	return nil
 }

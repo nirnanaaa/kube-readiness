@@ -17,29 +17,27 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
-
 	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
 	corev1 "k8s.io/api/core/v1"
 )
 
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
-	Log logr.Logger
+	Log                 logr.Logger
+	ReadinessController *readiness.Controller
 }
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
 
 func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("pod", req.NamespacedName)
-
-	// your logic here
+	_ = r.Log.WithValues("ingress", req.NamespacedName)
+	r.ReadinessController.SyncPod(req.NamespacedName)
 
 	return ctrl.Result{}, nil
 }

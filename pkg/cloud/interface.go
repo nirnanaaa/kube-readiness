@@ -7,6 +7,7 @@ import (
 // SDK defines a common interface for cloud providers
 type SDK interface {
 	GetEndpointGroupsByHostname(context.Context, string) ([]*EndpointGroup, error)
+	IsEndpointHealthy(context.Context, []EndpointGroup, string) (bool, error)
 }
 
 // EndpointGroup group defines a set of cloud endpoints

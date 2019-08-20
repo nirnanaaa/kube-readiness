@@ -18,19 +18,19 @@ type EndpointPodMap map[IngressEndpoint]types.NamespacedName
 type IngressSet map[types.NamespacedName]IngressData
 
 type IngressData struct {
-	IngressEndpoints *IngressEndpointSet
+	IngressEndpoints IngressEndpointSet
 	LoadBalancer     LoadBalancerData
 }
 
 type LoadBalancerData struct {
 	//TODO: Should we store the hostname or the name(arn) of the ALB here?
 	Hostname  string
-	Endpoints []*cloud.EndpointGroup
+	Endpoints []cloud.EndpointGroup
 }
 
 func (i IngressSet) Ensure(name types.NamespacedName) IngressData {
 	if _, ok := i[name]; !ok {
-		i[name] = IngressData{&IngressEndpointSet{}, LoadBalancerData{}}
+		i[name] = IngressData{IngressEndpointSet{}, LoadBalancerData{}}
 	}
 	return i[name]
 }
@@ -41,8 +41,26 @@ func (i IngressSet) Remove(names ...types.NamespacedName) {
 	}
 }
 
+func (i IngressSet) FindByIP(ip string) IngressData {
+	for _, item := range i {
+		if item.IngressEndpoints.HasIp(ip) {
+			return item
+		}
+	}
+	return IngressData{IngressEndpointSet{}, LoadBalancerData{}}
+}
+
 // IngressEndpointSet maps pods to ingresses
 type IngressEndpointSet map[IngressEndpoint]struct{}
+
+func (i IngressEndpointSet) HasIp(ip string) bool {
+	for isp := range i {
+		if isp.IP == ip {
+			return true
+		}
+	}
+	return false
+}
 
 // Insert adds items to the set.
 func (i IngressEndpointSet) Insert(items ...IngressEndpoint) {
