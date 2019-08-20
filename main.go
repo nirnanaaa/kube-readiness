@@ -51,10 +51,14 @@ func init() {
 
 func main() {
 	var metricsAddr string
+	var region string
+	var assumeRoleArn string
 	var enableLeaderElection bool
 	//TODO: What is the proper time to resync all? Do we want to use same resync intervall for all?
 	syncPeriod := 1 * time.Minute
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&assumeRoleArn, "aws-assume-role-arn", "", "A role that should be assumed from aws.")
+	flag.StringVar(&region, "aws-region", "eu-west-1", "The AWS region to bind to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
@@ -74,7 +78,12 @@ func main() {
 
 	controller := readiness.NewController(mgr.GetClient())
 	controller.Log = ctrl.Log.WithName("controllers").WithName("Readiness")
-	controller.CloudSDK = aws.NewCloudSDK()
+	awsSdk, err := aws.NewCloudSDK(region, assumeRoleArn)
+	if err != nil {
+		setupLog.Error(err, "unable to setup Cloud SDK", "componoent", "awsSDK")
+		os.Exit(1)
+	}
+	controller.CloudSDK = awsSdk
 
 	if err = (&controllers.PodReconciler{
 		Client: mgr.GetClient(),
