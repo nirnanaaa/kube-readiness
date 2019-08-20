@@ -244,11 +244,15 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 		// Error reading the object - requeue the request.
 		return err
 	}
+	status, found := readinessConditionStatus(pod)
+	if !found {
+		log.Error(err, "pod does not have readiness gates enabled. skipping")
+		return nil
+	}
 	ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
 	if len(ingress.IngressEndpoints) == 0 {
 		return errors.New("pod does not have ingress yet")
 	}
-	status, _ := readinessConditionStatus(pod)
 
 	//TODO: We need to pass the port as well (store it as well in IngressSet)
 	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP)
