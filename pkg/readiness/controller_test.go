@@ -15,7 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-var backend = &extensionsv1beta1.IngressBackend{
+var backend = extensionsv1beta1.IngressBackend{
 	ServiceName: "test",
 	ServicePort: intstr.FromString("http"),
 }
@@ -26,7 +26,21 @@ var dummyIngress = &extensionsv1beta1.Ingress{
 		Namespace: "default",
 	},
 	Spec: extensionsv1beta1.IngressSpec{
-		Backend: backend,
+		Rules: []extensionsv1beta1.IngressRule{
+			{
+				Host: "test",
+				IngressRuleValue: extensionsv1beta1.IngressRuleValue{
+					HTTP: &extensionsv1beta1.HTTPIngressRuleValue{
+						Paths: []extensionsv1beta1.HTTPIngressPath{
+							{
+								Path:    "/test",
+								Backend: backend,
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 }
 

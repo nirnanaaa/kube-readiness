@@ -32,7 +32,8 @@ type Controller struct {
 	Log            logr.Logger
 	EndpointPodMap EndpointPodMap
 	IngressSet     IngressSet
-	queue          workqueue.RateLimitingInterface
+	ingressQueue   workqueue.RateLimitingInterface
+	podQueue       workqueue.RateLimitingInterface
 	CloudSDK       cloud.SDK
 	KubeSDK        client.Client
 }
@@ -41,7 +42,8 @@ func NewController(kube client.Client) *Controller {
 	//TODO: When things fail NewRateLimitingQueue resends rather quickly, what do we do about that?
 	//Potentialy if it sends to fast and alb-ingress-controller is to slow it might miss the info of hostname
 	return &Controller{
-		queue:          workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		ingressQueue:   workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		podQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		EndpointPodMap: make(EndpointPodMap),
 		IngressSet:     make(IngressSet),
 		KubeSDK:        kube,
@@ -49,61 +51,82 @@ func NewController(kube client.Client) *Controller {
 }
 
 func (r *Controller) Run(stopCh <-chan struct{}) {
-	defer r.queue.ShutDown()
-	go wait.Until(r.worker, time.Second, stopCh)
+	defer r.podQueue.ShutDown()
+	defer r.ingressQueue.ShutDown()
+	go wait.Until(r.ingressWorker, time.Second, stopCh)
+	go wait.Until(r.podWorker, time.Second, stopCh)
 	<-stopCh
 }
 
-func (r *Controller) worker() {
-	for r.processNextWorkItem() {
+func (r *Controller) ingressWorker() {
+	for r.processNextIngressWorkItem() {
 	}
 }
-
-func (r *Controller) processNextWorkItem() bool {
-	key, quit := r.queue.Get()
+func (r *Controller) podWorker() {
+	for r.processNextPodWorkItem() {
+	}
+}
+func (r *Controller) processNextPodWorkItem() bool {
+	key, quit := r.podQueue.Get()
 	if quit {
 		return false
 	}
-	defer r.queue.Done(key)
-	message := key.(Message)
-	if message.Type == "ingress" {
-		err := r.syncIngressInternal(message.NamespacedName)
-		r.handleErr(err, message)
-	} else {
-		err := r.syncPodInternal(message.NamespacedName)
-		r.handleErr(err, message)
+	defer r.podQueue.Done(key)
+	message := key.(types.NamespacedName)
+	err := r.syncPodInternal(message)
+	r.handlePodErr(err, message)
+
+	return true
+}
+func (r *Controller) processNextIngressWorkItem() bool {
+	key, quit := r.ingressQueue.Get()
+	if quit {
+		return false
 	}
+	defer r.ingressQueue.Done(key)
+	message := key.(types.NamespacedName)
+	err := r.syncIngressInternal(message)
+	r.handleIngressErr(err, message)
 
 	return true
 }
 
 // handleErr handles errors from syncIngress
-func (r *Controller) handleErr(err error, msg Message) {
+func (r *Controller) handlePodErr(err error, msg types.NamespacedName) {
 	if err == nil {
-		r.queue.Forget(msg)
+		r.podQueue.Forget(msg)
 		return
 	}
-	r.Log.Info("received an error", "name", msg.NamespacedName.String(), "error", err.Error())
+	r.Log.Info("received an error", "name", msg.String(), "error", err.Error())
 
-	if r.queue.NumRequeues(msg) < maxRetries {
-		r.queue.AddRateLimited(msg)
+	if r.podQueue.NumRequeues(msg) < maxRetries {
+		r.podQueue.AddRateLimited(msg)
 		return
 	}
-	r.queue.Forget(msg)
+	r.podQueue.Forget(msg)
+}
+
+// handleErr handles errors from syncIngress
+func (r *Controller) handleIngressErr(err error, msg types.NamespacedName) {
+	if err == nil {
+		r.ingressQueue.Forget(msg)
+		return
+	}
+	r.Log.Info("received an error", "name", msg.String(), "error", err.Error())
+
+	if r.ingressQueue.NumRequeues(msg) < maxRetries {
+		r.ingressQueue.AddRateLimited(msg)
+		return
+	}
+	r.ingressQueue.Forget(msg)
 }
 
 func (r *Controller) SyncIngress(ing types.NamespacedName) {
-	r.queue.Add(Message{
-		Type:           "ingress",
-		NamespacedName: ing,
-	})
+	r.ingressQueue.Add(ing)
 }
 
 func (r *Controller) SyncPod(pod types.NamespacedName) {
-	r.queue.Add(Message{
-		Type:           "pod",
-		NamespacedName: pod,
-	})
+	r.podQueue.Add(pod)
 }
 
 // query AWS for that ingress with namespacedName %s, processing is done asynchronously
@@ -242,7 +265,11 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 						log.Error(err, "something was wrong when gathering target health")
 						return err
 					}
+					status, _ := readinessConditionStatus(pod)
 					if healthy {
+						status.Status = corev1.ConditionTrue
+						setReadinessConditionStatus(pod, status)
+						patchPodStatus(r.KubeSDK, ctx, pod)
 						//TODO: on healthy set Annotation to ready
 						log.Info("Please set me to TRUE!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 						return nil
