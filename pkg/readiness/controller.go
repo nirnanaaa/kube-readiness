@@ -246,7 +246,7 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	}
 	status, found := readinessConditionStatus(pod)
 	if !found {
-		log.Error(err, "pod does not have readiness gates enabled. skipping")
+		log.Info("pod does not have readiness gates enabled.", "name", pod.Name, "namespace", pod.Namespace)
 		return nil
 	}
 	ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
