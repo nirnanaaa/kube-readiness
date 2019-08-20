@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
+	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -108,7 +109,49 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	}
 	ingressData.LoadBalancer.Hostname = hostname
 
-	//TODO: Find endpoints and store them in the SET
+	//Find all services for Ingress
+	if len(ingress.Spec.Rules) < 1 {
+		log.Info("Ingress has no rules, therefore no services")
+		return nil
+	}
+	for _, rule := range ingress.Spec.Rules {
+		if len(rule.IngressRuleValue.HTTP.Paths) < 1 {
+			log.Info("Ingress Spec has no Paths, therefore no services")
+			return nil
+		}
+		for _, p := range rule.IngressRuleValue.HTTP.Paths {
+			//TODO: Is the assumption correct that both Ingress and Service are in the same namespace?
+			service := &corev1.Service{}
+			svcKey := types.NamespacedName{
+				Namespace: namespacedName.Namespace,
+				Name:      p.Backend.ServiceName,
+			}
+			if err := r.KubeSDK.Get(ctx, svcKey, service); err != nil {
+				if apierrors.IsNotFound(err) {
+					log.Info("could not find service: " + svcKey.String())
+					return errors.New("retry service whas not available")
+				}
+				// Error reading the object - requeue the request.
+				return err
+			}
+			//Find the endpoints for the service
+			eps := &corev1.Endpoints{}
+			if err := r.KubeSDK.Get(ctx, svcKey, eps); err != nil {
+				log.Error(err, "something wrong happen when fetching Endpoint")
+				return err
+			}
+			for _, sub := range eps.Subsets {
+				//TODO there are multiple ports which one to use?
+				//Only check the NotReadyAddresses only
+				for _, add := range sub.NotReadyAddresses {
+					ingressData.IngressEndpoints.Insert(IngressEndpoint{
+						IP: add.IP,
+					})
+				}
+			}
+
+		}
+	}
 
 	log.Info("ensuring ingress is up to date with aws api")
 	endpoints, err := r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
@@ -118,9 +161,15 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	}
 	ingressData.LoadBalancer.Endpoints = endpoints
 
-	log.Info(fmt.Sprintf("received Ingress [%s] with hostname [%s], containing following LoadBalancer endpoints", namespacedName.String(), hostname))
-	for _, endpoint := range endpoints {
-		log.Info(fmt.Sprintf("endpoint name [%s]", endpoint.Name))
+	//TODO: how do we handle host mode vs ip mode
+
+	log.Info(fmt.Sprintf("received Ingress [%s] with hostname [%s], containing following LoadBalancer endpoints and Service endpoits", namespacedName.String(), hostname))
+	for _, endpoint := range ingressData.LoadBalancer.Endpoints {
+		log.Info(fmt.Sprintf("LoadBalancer endpoint name [%s]", endpoint.Name))
 	}
+	for endpoint := range *ingressData.IngressEndpoints {
+		log.Info(fmt.Sprintf("Ingress endpoint name [%s]", endpoint.IP))
+	}
+
 	return
 }

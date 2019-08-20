@@ -106,7 +106,7 @@ func (c *Cloud) describeTargetGroupsHelper(input *elbv2.DescribeTargetGroupsInpu
 	return result, err
 }
 
-//TODO: is there no otherway to figure out the name from namespace? We can't use query as we do with cli because we then need to fetch all ALB's
+//TODO: is there no otherway to figure out the name from hostname? We can't use query as we do with cli because we then need to fetch all ALB's
 func getNameFromHostname(hostname string) string {
 	//Internal looks something like this internal-aefc3232-ab-prometheus-d4e5-1883083075.eu-west-1.elb.amazonaws.com
 	left := strings.Split(hostname, ".")[0]
