@@ -269,7 +269,9 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 					if healthy {
 						status.Status = corev1.ConditionTrue
 						setReadinessConditionStatus(pod, status)
-						patchPodStatus(r.KubeSDK, ctx, pod)
+						if err := patchPodStatus(r.KubeSDK, ctx, pod); err != nil {
+							return err
+						}
 						//TODO: on healthy set Annotation to ready
 						log.Info("Please set me to TRUE!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 						return nil
