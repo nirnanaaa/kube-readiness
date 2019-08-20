@@ -13,3 +13,9 @@ type SDK interface {
 type EndpointGroup struct {
 	Name string
 }
+
+// LoadBalancer defines a single load balancer from a cloud provider
+type LoadBalancer struct {
+	Name     string
+	Hostname string
+}
