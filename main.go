@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/nirnanaaa/kube-readiness/controllers"
+	"github.com/nirnanaaa/kube-readiness/pkg/cloud/aws"
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
@@ -73,6 +74,7 @@ func main() {
 
 	controller := readiness.NewController(mgr.GetClient())
 	controller.Log = ctrl.Log.WithName("controllers").WithName("Readiness")
+	controller.CloudSDK = aws.NewCloudSDK()
 
 	if err = (&controllers.PodReconciler{
 		Client: mgr.GetClient(),

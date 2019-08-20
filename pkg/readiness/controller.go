@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/nirnanaaa/kube-readiness/pkg/cloud/aws"
+	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -26,7 +26,7 @@ type Controller struct {
 	EndpointPodMap EndpointPodMap
 	IngressSet     IngressSet
 	queue          workqueue.RateLimitingInterface
-	CloudSDK       aws.SDK
+	CloudSDK       cloud.SDK
 	KubeSDK        client.Client
 }
 

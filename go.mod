@@ -3,6 +3,7 @@ module github.com/nirnanaaa/kube-readiness
 go 1.12
 
 require (
+	github.com/aws/aws-sdk-go v1.23.4
 	github.com/go-logr/logr v0.1.0
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
