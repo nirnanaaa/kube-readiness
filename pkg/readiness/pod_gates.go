@@ -45,6 +45,8 @@ func readinessGateEnabled(pod *v1.Pod) bool {
 	return false
 }
 
-func patchPodStatus(c client.Client, ctx context.Context, pod *v1.Pod) error {
-	return c.Patch(ctx, pod, client.Apply)
+func patchPodStatus(c client.Client, ctx context.Context, pod *v1.Pod, condition v1.PodCondition) error {
+	depPatch := client.MergeFrom(pod.DeepCopy())
+	setReadinessConditionStatus(pod, condition)
+	return c.Status().Patch(ctx, pod, depPatch)
 }

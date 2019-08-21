@@ -234,10 +234,11 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err error) {
 	log := r.Log.WithValues("trigger", "scheduled")
 	ctx := context.Background()
-	log.Info("received pod update")
 	pod := &corev1.Pod{}
 	if err := r.KubeSDK.Get(ctx, namespacedName, pod); err != nil {
 		if apierrors.IsNotFound(err) {
+			// TODO: remove here from ingress map
+
 			log.Info("pod not found, skipping")
 			return nil
 		}
@@ -247,6 +248,11 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	status, found := readinessConditionStatus(pod)
 	if !found {
 		log.Info("pod does not have readiness gates enabled.", "name", pod.Name, "namespace", pod.Namespace)
+		return nil
+	}
+	// TODO: remove this as soon as we handle some different status than true
+	if status.Status == corev1.ConditionTrue {
+		log.Info("pod is already ready. skipping check", "name", pod.Name, "namespace", pod.Namespace)
 		return nil
 	}
 	ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
@@ -262,10 +268,10 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	}
 	if healthy {
 		status.Status = corev1.ConditionTrue
-		setReadinessConditionStatus(pod, status)
-		if err := patchPodStatus(r.KubeSDK, ctx, pod); err != nil {
+		if err := patchPodStatus(r.KubeSDK, ctx, pod, status); err != nil {
 			return err
 		}
+		fmt.Printf("%+v\n", pod.Status)
 		//TODO: on healthy set Annotation to ready
 		return nil
 	}

@@ -2,6 +2,7 @@ package readiness
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
@@ -55,6 +56,40 @@ var ingressStatus = extensionsv1beta1.IngressStatus{
 	},
 }
 
+var dummyService = &v1.Service{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "default",
+	},
+	Spec: v1.ServiceSpec{
+		Ports: []v1.ServicePort{
+			{
+				Name:       "http",
+				Protocol:   v1.ProtocolTCP,
+				Port:       80,
+				TargetPort: intstr.FromInt(80),
+			},
+		},
+		// Ports: []v1.ServicePorts{},
+	},
+}
+
+var dummyEndpoint = &v1.Endpoints{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "default",
+	},
+	Subsets: []v1.EndpointSubset{
+		{
+			Addresses: []v1.EndpointAddress{
+				{
+					IP: "123.244.255.254",
+				},
+			},
+		},
+		// Ports: []v1.ServicePorts{},
+	},
+}
 var dummyPod = &v1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
@@ -104,6 +139,11 @@ var _ = Describe("Readiness Types", func() {
 		It("should add an ingress to check", func() {
 
 			err := k8sClient.Create(context.TODO(), dummyIngress)
+			Expect(err).To(BeNil())
+			err = k8sClient.Create(context.TODO(), dummyService)
+			Expect(err).To(BeNil())
+			err = k8sClient.Create(context.TODO(), dummyEndpoint)
+			Expect(err).To(BeNil())
 			name := types.NamespacedName{
 				Namespace: "default",
 				Name:      "test",
@@ -144,6 +184,16 @@ var _ = Describe("Readiness Types", func() {
 			ingressSet.LoadBalancer.Hostname = "test1234"
 			// ingressSet.LoadBalancer.Endpoints =
 			controller.SyncPod(name)
+			var expectedPod v1.Pod
+
+			Eventually(func() v1.ConditionStatus {
+
+				err = k8sClient.Get(context.TODO(), name, &expectedPod)
+				Expect(err).To(BeNil())
+				return expectedPod.Status.Conditions[0].Status
+			}, timeout, interval).Should(Equal(v1.ConditionTrue))
+
+			fmt.Printf("%+v", expectedPod.Status.Conditions)
 			// Eventually(func() IngressData {
 			// 	return controller.IngressSet[name]
 			// }, timeout, interval).ShouldNot(BeNil())
