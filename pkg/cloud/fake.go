@@ -16,6 +16,6 @@ func (c *Fake) IsEndpointHealthy(ctx context.Context, groups []EndpointGroup, na
 	return true, nil
 }
 
-func (c *Fake) RemoveEndpoint(ctx context.Context, groups []EndpointGroup, name string) error {
+func (c *Fake) RemoveEndpoint(ctx context.Context, groups []EndpointGroup, name string, port int32) error {
 	return nil
 }

@@ -144,13 +144,14 @@ func (c *Cloud) IsEndpointHealthy(ctx context.Context, groups []cloud.EndpointGr
 	return false, nil
 }
 
-func (c *Cloud) RemoveEndpoint(ctx context.Context, groups []cloud.EndpointGroup, name string) error {
+func (c *Cloud) RemoveEndpoint(ctx context.Context, groups []cloud.EndpointGroup, name string, port int32) error {
 	for _, endpoint := range groups {
 		_, err := c.elbv2.DeregisterTargets(&elbv2.DeregisterTargetsInput{
 			TargetGroupArn: awssdk.String(endpoint.Name),
 			Targets: []*elbv2.TargetDescription{
 				{
-					Id: awssdk.String(name),
+					Id:   awssdk.String(name),
+					Port: awssdk.Int64(int64(port)),
 				},
 			},
 		})
