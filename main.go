@@ -70,7 +70,6 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		SyncPeriod:         &syncPeriod,
-		Namespace:          "armin",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
