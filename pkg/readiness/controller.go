@@ -269,10 +269,11 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	}
 	if healthy {
 		status.Status = corev1.ConditionTrue
-		if err := patchPodStatus(r.KubeSDK, ctx, pod, status); err != nil {
-			return err
-		}
-		//TODO: on healthy set Annotation to ready
+	}
+	if err := patchPodStatus(r.KubeSDK, ctx, pod, status); err != nil {
+		return err
+	}
+	if healthy {
 		return nil
 	}
 	return errors.New("pod not healthy yet")
