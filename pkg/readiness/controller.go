@@ -40,8 +40,9 @@ type Controller struct {
 func NewController(kube client.Client) *Controller {
 	//TODO: When things fail NewRateLimitingQueue resends rather quickly, what do we do about that?
 	//Potentialy if it sends to fast and alb-ingress-controller is to slow it might miss the info of hostname
+	slowRateLimiter := workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, 1000*time.Second)
 	return &Controller{
-		ingressQueue:   workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		ingressQueue:   workqueue.NewRateLimitingQueue(slowRateLimiter),
 		podQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		EndpointPodMap: make(EndpointPodMap),
 		IngressSet:     make(IngressSet),
