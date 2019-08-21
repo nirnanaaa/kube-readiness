@@ -62,7 +62,7 @@ kubectl apply -n $NAMESPACE -f ./echoserver/echoserver-ingress.yaml > /dev/null
 
 echo -n "Waiting for loadbalancer DNS location to become available"
 while [[ -z $ECHOSERVER_LB_DNS ]]; do
-  ECHOSERVER_LB_DNS=$(aws --region=eu-west-1 elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName,'$NAMESPACE') && contains(LoadBalancerName 'echoserver')].DNSName" --output text)
+  ECHOSERVER_LB_DNS=$(aws --region=eu-west-1 elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName,'$NAMESPACE') && contains(LoadBalancerName 'echo')].DNSName" --output text)
   printf '.'
   sleep 2
 done

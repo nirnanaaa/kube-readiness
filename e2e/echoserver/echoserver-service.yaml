@@ -3,9 +3,12 @@ kind: Service
 metadata:
   name: echoserver
 spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
   ports:
     - port: 80
-      targetPort: 8080
+      targetPort: http
       protocol: TCP
+      name: http
   selector:
     app: echoserver

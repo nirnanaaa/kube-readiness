@@ -1,8 +1,7 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
-import { Rate, Counter } from "k6/metrics";
+import { Counter } from "k6/metrics";
 
-let Errors = new Rate("Errors");
 let CounterErrors = new Counter("Errors");
 
 export let options = {
