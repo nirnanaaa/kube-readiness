@@ -15,3 +15,7 @@ func (c *Fake) GetLoadBalancerByHostname(ctx context.Context, name string) (lb *
 func (c *Fake) IsEndpointHealthy(ctx context.Context, groups []EndpointGroup, name string, port int32) (b bool, err error) {
 	return true, nil
 }
+
+func (c *Fake) RemoveEndpoint(ctx context.Context, groups []EndpointGroup, name string) error {
+	return nil
+}

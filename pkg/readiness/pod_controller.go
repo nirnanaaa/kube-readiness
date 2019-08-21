@@ -59,6 +59,24 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 		// Error reading the object - requeue the request.
 		return err
 	}
+
+	//If this is a pod beeing deleted remove it from ALB
+	if pod.DeletionTimestamp != nil {
+		log.Info("received an Pod deletion", "name", pod.Name, "namespace", pod.Namespace)
+		ingress, _ := r.IngressSet.FindByIP(pod.Status.PodIP)
+		if len(ingress.IngressEndpoints) == 0 {
+			log.Info("pod does not have an ingress")
+			return nil
+		}
+		err := r.CloudSDK.RemoveEndpoint(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP)
+		if err != nil {
+			log.Error(err, "could not remove endpoint")
+			return err
+		}
+		log.Info("pod Endpoint removed from AWS")
+		return nil
+	}
+
 	if !readinessGateEnabled(pod) {
 		log.Info("pod does not have readiness gates enabled.", "name", pod.Name, "namespace", pod.Namespace)
 		return nil

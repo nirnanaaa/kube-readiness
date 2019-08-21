@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
+	awserr "github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -141,4 +142,30 @@ func (c *Cloud) IsEndpointHealthy(ctx context.Context, groups []cloud.EndpointGr
 		return false, nil
 	}
 	return false, nil
+}
+
+func (c *Cloud) RemoveEndpoint(ctx context.Context, groups []cloud.EndpointGroup, name string) error {
+	for _, endpoint := range groups {
+		_, err := c.elbv2.DeregisterTargets(&elbv2.DeregisterTargetsInput{
+			TargetGroupArn: awssdk.String(endpoint.Name),
+			Targets: []*elbv2.TargetDescription{
+				{
+					Id: awssdk.String(name),
+				},
+			},
+		})
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				case elbv2.ErrCodeInvalidTargetException:
+					continue
+				default:
+					return err
+				}
+			}
+			return err
+		}
+		return nil
+	}
+	return nil
 }
