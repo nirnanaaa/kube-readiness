@@ -21,7 +21,7 @@ var _ = Describe("Readiness Types", func() {
 			By("adding an ingress")
 			ep := IngressEndpoint{
 				IP:   "10.10.0.1",
-				Port: "80",
+				Port: 80,
 				Node: "10.10.0.0",
 			}
 			endpointMap.IngressEndpoints.Insert(ep)

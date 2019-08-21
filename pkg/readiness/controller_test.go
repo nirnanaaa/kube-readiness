@@ -184,7 +184,7 @@ var _ = Describe("Readiness Types", func() {
 			ingressSet := controller.IngressSet.Ensure(name)
 			ingressSet.IngressEndpoints.Insert(IngressEndpoint{
 				IP:   "123.244.255.254",
-				Port: "1234",
+				Port: 1234,
 			})
 			ingressSet.LoadBalancer.Hostname = "test1234"
 			// ingressSet.LoadBalancer.Endpoints =

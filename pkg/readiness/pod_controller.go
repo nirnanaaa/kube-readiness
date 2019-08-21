@@ -70,13 +70,12 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 		log.Info("pod is already ready. skipping check", "name", pod.Name, "namespace", pod.Namespace)
 		return nil
 	}
-	ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
+	ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
 	if len(ingress.IngressEndpoints) == 0 {
 		return errors.New("pod does not have ingress yet")
 	}
 
-	//TODO: We need to pass the port as well (store it as well in IngressSet)
-	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP)
+	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
 	if err != nil {
 		log.Error(err, "something was wrong when gathering target health")
 		return err

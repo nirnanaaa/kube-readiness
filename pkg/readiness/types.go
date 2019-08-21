@@ -8,7 +8,7 @@ import (
 // IngressEndpoint contains the essential information for each pod in a endpoint group.
 type IngressEndpoint struct {
 	IP   string
-	Port string
+	Port int32
 	Node string
 }
 
@@ -41,26 +41,19 @@ func (i IngressSet) Remove(names ...types.NamespacedName) {
 	}
 }
 
-func (i IngressSet) FindByIP(ip string) IngressData {
+func (i IngressSet) FindByIP(ip string) (IngressData, IngressEndpoint) {
 	for _, item := range i {
-		if item.IngressEndpoints.HasIp(ip) {
-			return item
+		for endpoint := range item.IngressEndpoints {
+			if endpoint.IP == ip {
+				return item, endpoint
+			}
 		}
 	}
-	return IngressData{IngressEndpointSet{}, LoadBalancerData{}}
+	return IngressData{IngressEndpointSet{}, LoadBalancerData{}}, IngressEndpoint{}
 }
 
 // IngressEndpointSet maps pods to ingresses
 type IngressEndpointSet map[IngressEndpoint]struct{}
-
-func (i IngressEndpointSet) HasIp(ip string) bool {
-	for isp := range i {
-		if isp.IP == ip {
-			return true
-		}
-	}
-	return false
-}
 
 // Insert adds items to the set.
 func (i IngressEndpointSet) Insert(items ...IngressEndpoint) {

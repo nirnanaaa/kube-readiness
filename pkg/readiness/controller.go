@@ -154,12 +154,14 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 				//TODO there are multiple ports which one to use?
 				for _, add := range sub.Addresses {
 					ingressData.IngressEndpoints.Insert(IngressEndpoint{
-						IP: add.IP,
+						IP:   add.IP,
+						Port: sub.Ports[0].Port,
 					})
 				}
 				for _, add := range sub.NotReadyAddresses {
 					ingressData.IngressEndpoints.Insert(IngressEndpoint{
-						IP: add.IP,
+						IP:   add.IP,
+						Port: sub.Ports[0].Port,
 					})
 				}
 			}
