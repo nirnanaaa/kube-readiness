@@ -9,15 +9,18 @@ import (
 )
 
 func readinessConditionStatus(pod *v1.Pod) (condition v1.PodCondition, exists bool) {
+	emptyPodCondition := v1.PodCondition{
+		Type: alb.ReadinessGate,
+	}
 	if pod == nil {
-		return v1.PodCondition{}, false
+		return emptyPodCondition, false
 	}
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == alb.ReadinessGate {
 			return condition, true
 		}
 	}
-	return v1.PodCondition{}, false
+	return emptyPodCondition, false
 }
 
 func setReadinessConditionStatus(pod *v1.Pod, condition v1.PodCondition) {

@@ -43,7 +43,7 @@ func NewController(kube client.Client) *Controller {
 	slowRateLimiter := workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, 1000*time.Second)
 	return &Controller{
 		ingressQueue:   workqueue.NewRateLimitingQueue(slowRateLimiter),
-		podQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		podQueue:       workqueue.NewRateLimitingQueue(slowRateLimiter),
 		EndpointPodMap: make(EndpointPodMap),
 		IngressSet:     make(IngressSet),
 		KubeSDK:        kube,
