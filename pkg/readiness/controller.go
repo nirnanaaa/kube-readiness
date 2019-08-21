@@ -271,7 +271,6 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 		if err := patchPodStatus(r.KubeSDK, ctx, pod, status); err != nil {
 			return err
 		}
-		fmt.Printf("%+v\n", pod.Status)
 		//TODO: on healthy set Annotation to ready
 		return nil
 	}
