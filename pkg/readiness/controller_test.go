@@ -106,6 +106,11 @@ var dummyPod = &v1.Pod{
 				Image: "busybox",
 			},
 		},
+		ReadinessGates: []v1.PodReadinessGate{
+			{
+				ConditionType: alb.ReadinessGate,
+			},
+		},
 	},
 }
 

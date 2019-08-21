@@ -36,7 +36,7 @@ type PodReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
 
 func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("ingress", req.NamespacedName)
+	_ = r.Log.WithValues("pod", req.NamespacedName)
 	r.ReadinessController.SyncPod(req.NamespacedName)
 
 	return ctrl.Result{}, nil

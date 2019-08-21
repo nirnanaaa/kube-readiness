@@ -62,22 +62,7 @@ func (r *Controller) ingressWorker() {
 	for r.processNextIngressWorkItem() {
 	}
 }
-func (r *Controller) podWorker() {
-	for r.processNextPodWorkItem() {
-	}
-}
-func (r *Controller) processNextPodWorkItem() bool {
-	key, quit := r.podQueue.Get()
-	if quit {
-		return false
-	}
-	defer r.podQueue.Done(key)
-	message := key.(types.NamespacedName)
-	err := r.syncPodInternal(message)
-	r.handlePodErr(err, message)
 
-	return true
-}
 func (r *Controller) processNextIngressWorkItem() bool {
 	key, quit := r.ingressQueue.Get()
 	if quit {
@@ -89,21 +74,6 @@ func (r *Controller) processNextIngressWorkItem() bool {
 	r.handleIngressErr(err, message)
 
 	return true
-}
-
-// handleErr handles errors from syncIngress
-func (r *Controller) handlePodErr(err error, msg types.NamespacedName) {
-	if err == nil {
-		r.podQueue.Forget(msg)
-		return
-	}
-	r.Log.Info("received an error", "name", msg.String(), "error", err.Error())
-
-	if r.podQueue.NumRequeues(msg) < maxRetries {
-		r.podQueue.AddRateLimited(msg)
-		return
-	}
-	r.podQueue.Forget(msg)
 }
 
 // handleErr handles errors from syncIngress
@@ -123,10 +93,6 @@ func (r *Controller) handleIngressErr(err error, msg types.NamespacedName) {
 
 func (r *Controller) SyncIngress(ing types.NamespacedName) {
 	r.ingressQueue.Add(ing)
-}
-
-func (r *Controller) SyncPod(pod types.NamespacedName) {
-	r.podQueue.Add(pod)
 }
 
 // query AWS for that ingress with namespacedName %s, processing is done asynchronously
@@ -230,51 +196,4 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	fmt.Println(r.IngressSet)
 
 	return
-}
-
-func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err error) {
-	log := r.Log.WithValues("trigger", "scheduled")
-	ctx := context.Background()
-	pod := &corev1.Pod{}
-	if err := r.KubeSDK.Get(ctx, namespacedName, pod); err != nil {
-		if apierrors.IsNotFound(err) {
-			// TODO: remove here from ingress map
-
-			log.Info("pod not found, skipping")
-			return nil
-		}
-		// Error reading the object - requeue the request.
-		return err
-	}
-	status, found := readinessConditionStatus(pod)
-	if !found {
-		log.Info("pod does not have readiness gates enabled.", "name", pod.Name, "namespace", pod.Namespace)
-		return nil
-	}
-	// TODO: remove this as soon as we handle some different status than true
-	if status.Status == corev1.ConditionTrue {
-		log.Info("pod is already ready. skipping check", "name", pod.Name, "namespace", pod.Namespace)
-		return nil
-	}
-	ingress := r.IngressSet.FindByIP(pod.Status.PodIP)
-	if len(ingress.IngressEndpoints) == 0 {
-		return errors.New("pod does not have ingress yet")
-	}
-
-	//TODO: We need to pass the port as well (store it as well in IngressSet)
-	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP)
-	if err != nil {
-		log.Error(err, "something was wrong when gathering target health")
-		return err
-	}
-	if healthy {
-		status.Status = corev1.ConditionTrue
-	}
-	if err := patchPodStatus(r.KubeSDK, ctx, pod, status); err != nil {
-		return err
-	}
-	if healthy {
-		return nil
-	}
-	return errors.New("pod not healthy yet")
 }
