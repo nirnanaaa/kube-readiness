@@ -194,8 +194,5 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 		log.Info(fmt.Sprintf("Ingress endpoint name [%s]", endpoint.IP))
 	}
 
-	fmt.Println("zzzzzzzzzzzzzzzzzzz")
-	fmt.Println(r.IngressSet)
-
 	return
 }
