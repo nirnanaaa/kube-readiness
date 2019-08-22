@@ -68,6 +68,7 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 			log.Info("pod does not have an ingress")
 			return nil
 		}
+		log.Info("deregistering", "name", pod.Name, "namespace", pod.Namespace, "ip", pod.Status.PodIP, "port", endpoint.Port)
 		err := r.CloudSDK.RemoveEndpoint(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
 		if err != nil {
 			log.Error(err, "could not remove endpoint")
