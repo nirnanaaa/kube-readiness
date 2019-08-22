@@ -84,6 +84,17 @@ var dummyEndpoint = &v1.Endpoints{
 					IP: "123.244.255.254",
 				},
 			},
+			NotReadyAddresses: []v1.EndpointAddress{
+				{
+					IP: "123.244.255.254",
+				},
+			},
+			Ports: []v1.EndpointPort{
+				{
+					Name: "http",
+					Port: 80,
+				},
+			},
 		},
 		// Ports: []v1.ServicePorts{},
 	},
@@ -115,6 +126,7 @@ var _ = Describe("Readiness Types", func() {
 			Expect(err).To(BeNil())
 			err = k8sClient.Create(context.TODO(), dummyEndpoint)
 			Expect(err).To(BeNil())
+
 			name := types.NamespacedName{
 				Namespace: "default",
 				Name:      "test",

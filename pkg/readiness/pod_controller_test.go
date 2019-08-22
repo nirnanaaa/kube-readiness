@@ -2,7 +2,6 @@ package readiness
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
@@ -91,13 +90,10 @@ var _ = Describe("Readiness Types", func() {
 			var expectedPod v1.Pod
 
 			Eventually(func() v1.ConditionStatus {
-
 				err = k8sClient.Get(context.TODO(), name, &expectedPod)
 				Expect(err).To(BeNil())
 				return expectedPod.Status.Conditions[0].Status
 			}, timeout, interval).Should(Equal(v1.ConditionTrue))
-
-			fmt.Printf("%+v", expectedPod.Status.Conditions)
 		})
 	})
 })
