@@ -4,7 +4,9 @@ go 1.12
 
 require (
 	github.com/aws/aws-sdk-go v1.23.4
+	github.com/go-chi/chi v4.0.2+incompatible // indirect
 	github.com/go-logr/logr v0.1.0
+	github.com/gorilla/mux v1.7.3 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b

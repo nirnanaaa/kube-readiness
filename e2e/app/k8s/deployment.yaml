@@ -1,37 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: echoserver
+  name: kube-readiness
 spec:
   replicas: 5
   selector:
     matchLabels:
-      app: echoserver
+      app: kube-readiness
   template:
     metadata:
       labels:
-        app: echoserver
+        app: kube-readiness
     spec:
       readinessGates:
       - conditionType: aws.amazonaws.com/load-balancer-tg-ready
       containers:
-      - image: gcr.io/google_containers/echoserver:1.4
+      - image: iverberk/kube-readiness:1
         imagePullPolicy: Always
-        name: echoserver
+        name: kube-readiness
+        args: ["-term-delay", "15"]
         ports:
         - name: http
           containerPort: 8080
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: http
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: http
-        lifecycle:
-          preStop:
-            exec:
-              command: [
-                "/bin/sleep", "10"
-              ]

@@ -2,22 +2,18 @@ import http from "k6/http";
 import { check, sleep } from "k6";
 import { Counter } from "k6/metrics";
 
-let CounterErrors = new Counter("Errors");
+export let CounterErrors = new Counter("Errors");
 
 export let options = {
   vus: 10,
-  duration: "30s",
+  duration: "180s",
   thresholds: {
-    "Errors": [ { threshold: "count == 0" } ]
+    "Errors": [ { threshold: "count == 0", abortOnFail: true } ]
   }
 };
 
 export default function() {
-  const res = http.get(`http://${__ENV.ECHOSERVER_LB_DNS}`)
-
-  CounterErrors.add(check(res, {
+  check(http.get(`http://${__ENV.APP_LB_DNS}`), {
     "status is 200 (OK)": (r) => r.status == 200
-  }));
-
-  sleep(1);
+  }) || CounterErrors.add(true)
 };

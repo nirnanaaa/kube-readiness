@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
-  name: echoserver
+  name: kube-readiness
   annotations:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
@@ -13,5 +13,5 @@ spec:
         paths:
           - path: /
             backend:
-              serviceName: echoserver
+              serviceName: kube-readiness
               servicePort: 80
