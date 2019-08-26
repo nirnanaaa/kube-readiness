@@ -1,0 +1,118 @@
+From a94a2d693c820e4c5e0f27e951b3dddf6bb595c7 Mon Sep 17 00:00:00 2001
+From: Armin <armin@coralic.nl>
+Date: Mon, 26 Aug 2019 07:08:40 +0200
+Subject: [PATCH] Disable adding of a terminating pod
+
+---
+ internal/ingress/backend/endpoint.go       | 34 +++++++++++++++++++---
+ internal/ingress/controller/store/store.go | 10 +++++++
+ 2 files changed, 40 insertions(+), 4 deletions(-)
+
+diff --git a/internal/ingress/backend/endpoint.go b/internal/ingress/backend/endpoint.go
+index de44005c..e388fac6 100644
+--- a/internal/ingress/backend/endpoint.go
++++ b/internal/ingress/backend/endpoint.go
+@@ -18,6 +18,7 @@ package backend
+ 
+ import (
+ 	"fmt"
++	"context"
+ 
+ 	"github.com/kubernetes-sigs/aws-alb-ingress-controller/internal/k8s"
+ 
+@@ -27,6 +28,8 @@ import (
+ 	corev1 "k8s.io/api/core/v1"
+ 	extensions "k8s.io/api/extensions/v1beta1"
+ 	"k8s.io/apimachinery/pkg/util/intstr"
++	"k8s.io/apimachinery/pkg/types"
++	apierrors "k8s.io/apimachinery/pkg/api/errors"
+ )
+ 
+ // EndpointResolver resolves the endpoints for specific ingress backend
+@@ -101,10 +104,33 @@ func (resolver *endpointResolver) resolveIP(ingress *extensions.Ingress, backend
+ 				continue
+ 			}
+ 			for _, epAddr := range epSubset.Addresses {
+-				result = append(result, &elbv2.TargetDescription{
+-					Id:   aws.String(epAddr.IP),
+-					Port: aws.Int64(int64(epPort.Port)),
+-				})
++
++				fmt.Println("Custom check")
++				ctx := context.Background()
++				pod := &corev1.Pod{}
++				namespacedName := types.NamespacedName {
++								Namespace: epAddr.TargetRef.Namespace,
++								Name: epAddr.TargetRef.Name,
++							}
++				fmt.Println("Custom check, pod name: " + namespacedName.String())			
++				if err := resolver.store.GetClient().Get(ctx, namespacedName, pod); err != nil {
++					if apierrors.IsNotFound(err) {
++						fmt.Println("Custom check, pod not found")
++						continue
++					}
++					fmt.Println("Custom check, don't recognize the error follow the flow")
++				}
++				fmt.Println("Custom check, after the error")
++				if pod.DeletionTimestamp == nil {
++					fmt.Println("Custom check, pod not in terminating")
++					result = append(result, &elbv2.TargetDescription{
++						Id:   aws.String(epAddr.IP),
++						Port: aws.Int64(int64(epPort.Port)),
++					})
++				} else {
++					fmt.Println("Custom check, pod is terminated, not doing anything")
++					continue
++				}
+ 			}
+ 		}
+ 	}
+diff --git a/internal/ingress/controller/store/store.go b/internal/ingress/controller/store/store.go
+index 9c3158b8..09ae004a 100644
+--- a/internal/ingress/controller/store/store.go
++++ b/internal/ingress/controller/store/store.go
+@@ -34,6 +34,7 @@ import (
+ 	"k8s.io/client-go/tools/cache"
+ 
+ 	"sigs.k8s.io/controller-runtime/pkg/manager"
++	"sigs.k8s.io/controller-runtime/pkg/client"
+ )
+ 
+ // Storer is the interface that wraps the required methods to gather information
+@@ -65,6 +66,8 @@ type Storer interface {
+ 
+ 	// GetClusterInstanceIDs gets id of all instances inside cluster
+ 	GetClusterInstanceIDs() ([]string, error)
++
++	GetClient() client.Client
+ }
+ 
+ // Informer defines the required SharedIndexInformers that interact with the API server.
+@@ -111,6 +114,8 @@ type k8sStore struct {
+ 
+ 	// mu protects against simultaneous invocations of syncSecret
+ 	mu *sync.Mutex
++
++	client client.Client
+ }
+ 
+ // New creates a new object store to be used in the ingress controller
+@@ -120,6 +125,7 @@ func New(mgr manager.Manager, cfg *config.Configuration) (Storer, error) {
+ 		listers:   &Lister{},
+ 		cfg:       cfg,
+ 		mu:        &sync.Mutex{},
++		client:    mgr.GetClient(),
+ 	}
+ 
+ 	// k8sStore fulfils resolver.Resolver interface
+@@ -353,3 +359,7 @@ func (s *k8sStore) GetClusterInstanceIDs() (result []string, err error) {
+ 	}
+ 	return result, nil
+ }
++
++func (s *k8sStore) GetClient() client.Client {
++	return s.client
++}
+-- 
+2.22.0
+
