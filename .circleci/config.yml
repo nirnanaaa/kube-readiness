@@ -13,8 +13,7 @@ jobs:
       - run: export PATH="$PATH:/usr/local/kubebuilder/bin"
       - checkout
       - run: make test
-      - setup_remote_docker:   # (2)
-          docker_layer_caching: true # (3)
+      - setup_remote_docker: {}
       - run: docker login -u "$DOCKER_USER" -p "$DOCKER_PASS"
       - run: docker build -t fkconsultin/kube-readiness:$(git describe --abbrev=1 --tags --always) .
       - run: docker push fkconsultin/kube-readiness:$(git describe --abbrev=1 --tags --always)
