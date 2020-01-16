@@ -51,9 +51,6 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	pod := &corev1.Pod{}
 	if err := r.KubeSDK.Get(ctx, namespacedName, pod); err != nil {
 		if apierrors.IsNotFound(err) {
-			// TODO: remove here from ingress map
-
-			log.Info("pod not found, skipping")
 			return nil
 		}
 		// Error reading the object - requeue the request.
@@ -63,24 +60,7 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	if !readinessGateEnabled(pod) {
 		return nil
 	}
-
-	//If this is a pod beeing deleted remove it from ALB
-	// if pod.DeletionTimestamp != nil {
-	// 	log.Info("received an Pod deletion", "name"s, pod.Name, "namespace", pod.Namespace)
-	// 	ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
-	// 	if len(ingress.IngressEndpoints) == 0 {
-	// 		log.Info("pod does not have an ingress")
-	// 		return nil
-	// 	}
-	// 	// log.Info("deregistering", "name", pod.Name, "namespace", pod.Namespace, "ip", pod.Status.PodIP, "port", endpoint.Port)
-	// 	// err := r.CloudSDK.RemoveEndpoint(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
-	// 	// if err != nil {
-	// 	// 	log.Error(err, "could not remove endpoint")
-	// 	// 	return err
-	// 	// }
-	// 	// log.Info("pod Endpoint removed from AWS")
-	// 	return nil
-	// }
+	log = log.WithValues("pod", namespacedName.String())
 
 	status, _ := readinessConditionStatus(pod)
 
@@ -90,22 +70,21 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 
 	ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
 	if len(ingress.IngressEndpoints) == 0 {
-		return errors.New("pod does not have ingress yet")
+		return errors.New("pod does not belong to an ingress")
 	}
 
 	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
 	if err != nil {
-		log.Error(err, "something was wrong when gathering target health")
+		log.Error(err, "could not query target health")
 		return err
 	}
-	if healthy {
-		status.Status = corev1.ConditionTrue
+
+	if !healthy {
+		log.Info("pod is not healthy, yet")
+		status.Status = corev1.ConditionFalse
+		return patchPodStatus(r.KubeSDK, ctx, pod, status)
 	}
-	if err := patchPodStatus(r.KubeSDK, ctx, pod, status); err != nil {
-		return err
-	}
-	if healthy {
-		return nil
-	}
-	return errors.New("pod not healthy yet")
+
+	status.Status = corev1.ConditionTrue
+	return patchPodStatus(r.KubeSDK, ctx, pod, status)
 }
