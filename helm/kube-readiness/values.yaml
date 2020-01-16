@@ -47,6 +47,17 @@ resources: {}
 
 nodeSelector: {}
 
-tolerations: []
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: system
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: dedicated
+          operator: In
+          values:
+          - system

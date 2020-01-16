@@ -9,6 +9,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+var (
+	PodNotReadyErr = errors.New("pod is not ready, yet")
+)
+
 func (r *Controller) podWorker() {
 	for r.processNextPodWorkItem() {
 	}
@@ -55,7 +59,7 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 		// Error reading the object - requeue the request.
 		return err
 	}
-
+	log := r.Log.WithValues("pod", namespacedName.String())
 	if !readinessGateEnabled(pod) {
 		return nil
 	}
@@ -73,14 +77,17 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 
 	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
 	if err != nil {
-		r.Log.Error(err, "could not query target health")
+		log.Error(err, "could not query target health")
 		return err
 	}
 
 	if !healthy {
-		r.Log.Info("pod is not healthy, yet")
+		log.Info("pod is not healthy, yet")
 		status.Status = corev1.ConditionFalse
-		return patchPodStatus(r.KubeSDK, ctx, pod, status)
+		if err := patchPodStatus(r.KubeSDK, ctx, pod, status); err != nil {
+			return err
+		}
+		return PodNotReadyErr
 	}
 
 	status.Status = corev1.ConditionTrue
