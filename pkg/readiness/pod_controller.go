@@ -61,7 +61,6 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	}
 
 	if !readinessGateEnabled(pod) {
-		log.Info("pod does not have readiness gates enabled.", "name", pod.Name, "namespace", pod.Namespace)
 		return nil
 	}
 
@@ -85,11 +84,10 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 
 	status, _ := readinessConditionStatus(pod)
 
-	// TODO: remove this as soon as we handle some different status than true
 	if status.Status == corev1.ConditionTrue {
-		log.Info("pod is already ready. skipping check", "name", pod.Name, "namespace", pod.Namespace)
 		return nil
 	}
+
 	ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
 	if len(ingress.IngressEndpoints) == 0 {
 		return errors.New("pod does not have ingress yet")
