@@ -46,7 +46,6 @@ func (r *Controller) SyncPod(pod types.NamespacedName) {
 }
 
 func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err error) {
-	log := r.Log.WithValues("trigger", "scheduled")
 	ctx := context.Background()
 	pod := &corev1.Pod{}
 	if err := r.KubeSDK.Get(ctx, namespacedName, pod); err != nil {
@@ -60,7 +59,7 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	if !readinessGateEnabled(pod) {
 		return nil
 	}
-	log = log.WithValues("pod", namespacedName.String())
+	log := r.Log.WithValues("pod", namespacedName.String())
 
 	status, _ := readinessConditionStatus(pod)
 
@@ -70,7 +69,7 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 
 	ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
 	if len(ingress.IngressEndpoints) == 0 {
-		return errors.New("pod does not belong to an ingress")
+		return errors.New("pod does not belong to an ingress	")
 	}
 
 	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
