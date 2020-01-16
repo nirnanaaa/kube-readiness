@@ -38,14 +38,14 @@ spec:
             - name: metrics
               containerPort: 8080
               protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: metrics
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: metrics
+          # livenessProbe:
+          #   httpGet:
+          #     path: /healthz
+          #     port: metrics
+          # readinessProbe:
+          #   httpGet:
+          #     path: /healthz
+          #     port: metrics
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
