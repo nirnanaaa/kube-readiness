@@ -12,9 +12,15 @@ import (
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+var (
+	BackendNotFoundErr = errors.New("no backend found")
+	NoMatchingPortErr  = errors.New("no port matched")
 )
 
 const (
@@ -118,48 +124,42 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	}
 
 	//Find all services for Ingress
-	if len(ingress.Spec.Rules) < 1 {
+	if len(ingress.Spec.Rules) < 1 && ingress.Spec.Backend == nil {
 		return nil
 	}
-	for _, rule := range ingress.Spec.Rules {
-		if len(rule.IngressRuleValue.HTTP.Paths) < 1 {
-			log.Info("Ingress Spec has no Paths, therefore no services")
-			continue
+	serviceName, servicePort, err := r.collectIngressBackendService(ctx, ingress)
+	if err != nil {
+		if errors.Is(err, BackendNotFoundErr) {
+			return nil
 		}
-		for _, p := range rule.IngressRuleValue.HTTP.Paths {
-			service := &corev1.Service{}
-			svcKey := types.NamespacedName{
-				Namespace: namespacedName.Namespace,
-				Name:      p.Backend.ServiceName,
-			}
-			if err := r.KubeSDK.Get(ctx, svcKey, service); err != nil {
-				if apierrors.IsNotFound(err) {
-					return errors.New("service could not be found")
-				}
-				return err
-			}
+		return err
+	}
 
-			//Find the endpoints for the service
-			eps := &corev1.Endpoints{}
-			if err := r.KubeSDK.Get(ctx, svcKey, eps); err != nil {
-				return err
-			}
-			for _, sub := range eps.Subsets {
-				//TODO there are multiple ports which one to use?
-				for _, add := range sub.Addresses {
-					ingressData.IngressEndpoints.Insert(IngressEndpoint{
-						IP:   add.IP,
-						Port: sub.Ports[0].Port,
-					})
-				}
-				for _, add := range sub.NotReadyAddresses {
-					ingressData.IngressEndpoints.Insert(IngressEndpoint{
-						IP:   add.IP,
-						Port: sub.Ports[0].Port,
-					})
-				}
-			}
-
+	//Find the endpoints for the service
+	serviceEndpoints := &corev1.Endpoints{}
+	svcKey := types.NamespacedName{
+		Namespace: namespacedName.Namespace,
+		Name:      serviceName,
+	}
+	if err := r.KubeSDK.Get(ctx, svcKey, serviceEndpoints); err != nil {
+		return err
+	}
+	for _, endpointSubset := range serviceEndpoints.Subsets {
+		portIdx, err := getPortFromEndpointIdxPortMap(servicePort, &endpointSubset)
+		if err != nil {
+			return err
+		}
+		for _, endpointAddress := range endpointSubset.Addresses {
+			ingressData.IngressEndpoints.Insert(IngressEndpoint{
+				IP:   endpointAddress.IP,
+				Port: endpointSubset.Ports[portIdx].Port,
+			})
+		}
+		for _, endpointAddress := range endpointSubset.NotReadyAddresses {
+			ingressData.IngressEndpoints.Insert(IngressEndpoint{
+				IP:   endpointAddress.IP,
+				Port: endpointSubset.Ports[portIdx].Port,
+			})
 		}
 	}
 
@@ -176,4 +176,39 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 
 	r.IngressSet[namespacedName] = ingressData
 	return
+}
+
+func (r *Controller) collectIngressBackendService(ctx context.Context, ingress *extensionsv1beta1.Ingress) (serviceName string, port intstr.IntOrString, err error) {
+	if ingress.Spec.Backend != nil {
+		return ingress.Spec.Backend.ServiceName, ingress.Spec.Backend.ServicePort, nil
+	}
+	for _, rule := range ingress.Spec.Rules {
+		if len(rule.IngressRuleValue.HTTP.Paths) < 1 {
+			continue
+		}
+		for _, p := range rule.IngressRuleValue.HTTP.Paths {
+			service := &corev1.Service{}
+			svcKey := types.NamespacedName{
+				Namespace: ingress.Namespace,
+				Name:      p.Backend.ServiceName,
+			}
+			if err := r.KubeSDK.Get(ctx, svcKey, service); err != nil {
+				continue
+			}
+			return p.Backend.ServiceName, p.Backend.ServicePort, nil
+		}
+	}
+	return "", intstr.FromString(""), BackendNotFoundErr
+}
+
+func getPortFromEndpointIdxPortMap(servicePort intstr.IntOrString, endpointSubset *corev1.EndpointSubset) (portIdx int, err error) {
+	for idx, port := range endpointSubset.Ports {
+		if port.Name == servicePort.String() {
+			return idx, nil
+		}
+		if port.Port == int32(servicePort.IntValue()) {
+			return idx, nil
+		}
+	}
+	return 0, NoMatchingPortErr
 }
