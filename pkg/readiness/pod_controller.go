@@ -59,7 +59,6 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 	if !readinessGateEnabled(pod) {
 		return nil
 	}
-	log := r.Log.WithValues("pod", namespacedName.String())
 
 	status, _ := readinessConditionStatus(pod)
 
@@ -74,12 +73,12 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 
 	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
 	if err != nil {
-		log.Error(err, "could not query target health")
+		r.Log.Error(err, "could not query target health")
 		return err
 	}
 
 	if !healthy {
-		log.Info("pod is not healthy, yet")
+		r.Log.Info("pod is not healthy, yet")
 		status.Status = corev1.ConditionFalse
 		return patchPodStatus(r.KubeSDK, ctx, pod, status)
 	}
