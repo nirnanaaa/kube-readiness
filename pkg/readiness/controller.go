@@ -3,7 +3,6 @@ package readiness
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -164,10 +163,8 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 		}
 	}
 
-	log.Info("ensuring ingress is up to date with aws api")
 	endpoints, err := r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
 	if err != nil {
-		log.Error(err, "error fetching info from aws sdk")
 		return errors.New("error fetching info from aws sdk")
 	}
 	var tmp []cloud.EndpointGroup
@@ -178,16 +175,5 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	ingressData.LoadBalancer.Hostname = hostname
 
 	r.IngressSet[namespacedName] = ingressData
-
-	//TODO: how do we handle host mode vs ip mode
-
-	log.Info(fmt.Sprintf("received Ingress [%s] with hostname [%s], containing following LoadBalancer endpoints and Service endpoits", namespacedName.String(), hostname))
-	for _, endpoint := range ingressData.LoadBalancer.Endpoints {
-		log.Info(fmt.Sprintf("LoadBalancer endpoint name [%s]", endpoint.Name))
-	}
-	for endpoint := range ingressData.IngressEndpoints {
-		log.Info(fmt.Sprintf("Ingress endpoint name [%s]", endpoint.IP))
-	}
-
 	return
 }
