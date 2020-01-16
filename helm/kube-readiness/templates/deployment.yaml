@@ -27,6 +27,13 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+          {{- if .Values.region }}
+          - --aws-region={{ .Values.region }}
+          {{- end }}
+          {{- if .Values.awsAssumeRoleArn }}
+          - --aws-assume-role-arn={{ .Values.awsAssumeRoleArn }}
+          {{- end }}
           ports:
             - name: metrics
               containerPort: 8080

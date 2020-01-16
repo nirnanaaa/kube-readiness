@@ -12,6 +12,9 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+awsAssumeRoleArn:
+awsRegion:
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
