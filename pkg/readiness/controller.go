@@ -100,7 +100,6 @@ func (r *Controller) SyncIngress(ing types.NamespacedName) {
 func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (err error) {
 	log := r.Log.WithValues("trigger", "scheduled")
 	ctx := context.Background()
-	log.Info("received ingress update")
 	ingress := &extensionsv1beta1.Ingress{}
 	if err := r.KubeSDK.Get(ctx, namespacedName, ingress); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -121,13 +120,12 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 
 	//Find all services for Ingress
 	if len(ingress.Spec.Rules) < 1 {
-		log.Info("Ingress has no rules, therefore no services")
 		return nil
 	}
 	for _, rule := range ingress.Spec.Rules {
 		if len(rule.IngressRuleValue.HTTP.Paths) < 1 {
 			log.Info("Ingress Spec has no Paths, therefore no services")
-			return nil
+			continue
 		}
 		for _, p := range rule.IngressRuleValue.HTTP.Paths {
 			service := &corev1.Service{}
