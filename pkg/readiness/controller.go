@@ -129,7 +129,7 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 	}
 	serviceName, servicePort, err := r.collectIngressBackendService(ctx, ingress)
 	if err != nil {
-		if errors.Is(err, BackendNotFoundErr) {
+		if err == BackendNotFoundErr {
 			return nil
 		}
 		return err
