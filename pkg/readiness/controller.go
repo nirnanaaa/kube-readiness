@@ -103,24 +103,24 @@ func (r *Controller) SyncIngress(ing types.NamespacedName) {
 // query AWS for that ingress with namespacedName %s, processing is done asynchronously
 // after it new into should be added to r.IngressSet / r.EndpointPodMap
 func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (err error) {
-	log := r.Log.WithValues("trigger", "scheduled")
 	ctx := context.Background()
 	ingress := &extensionsv1beta1.Ingress{}
 	if err := r.KubeSDK.Get(ctx, namespacedName, ingress); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.IngressSet.Remove(namespacedName)
-			log.Info("removing not found ingress")
 			return nil
 		}
 		// Error reading the object - requeue the request.
 		return err
 	}
+	log := r.Log.WithValues("ingress", namespacedName.String())
 
 	ingressData := r.IngressSet.Ensure(namespacedName)
+	log.Info("extracing hostname")
 
 	hostname, err := extractHostname(ingress)
 	if err != nil {
-		return errors.New("ingress not ready, yet. requeue")
+		return err
 	}
 
 	//Find all services for Ingress

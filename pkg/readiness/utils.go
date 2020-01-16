@@ -2,6 +2,7 @@ package readiness
 
 import (
 	"errors"
+
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 )
 
