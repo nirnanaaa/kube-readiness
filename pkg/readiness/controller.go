@@ -130,7 +130,6 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 			return nil
 		}
 		for _, p := range rule.IngressRuleValue.HTTP.Paths {
-			//TODO: Is the assumption correct that both Ingress and Service are in the same namespace?
 			service := &corev1.Service{}
 			svcKey := types.NamespacedName{
 				Namespace: namespacedName.Namespace,
@@ -138,16 +137,14 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 			}
 			if err := r.KubeSDK.Get(ctx, svcKey, service); err != nil {
 				if apierrors.IsNotFound(err) {
-					log.Info("could not find service: " + svcKey.String())
-					return errors.New("retry service was not available")
+					return errors.New("service could not be found")
 				}
-				// Error reading the object - requeue the request.
 				return err
 			}
+
 			//Find the endpoints for the service
 			eps := &corev1.Endpoints{}
 			if err := r.KubeSDK.Get(ctx, svcKey, eps); err != nil {
-				log.Error(err, "something wrong happend when fetching Endpoint")
 				return err
 			}
 			for _, sub := range eps.Subsets {

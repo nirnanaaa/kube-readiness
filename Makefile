@@ -31,7 +31,7 @@ install: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	helm install kube-readiness --namespace=kube-system helm/kube-readiness
+	helm upgrade --install kube-readiness --namespace=kube-system helm/kube-readiness
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen

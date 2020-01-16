@@ -60,28 +60,29 @@ func (r *Controller) syncPodInternal(namespacedName types.NamespacedName) (err e
 		return err
 	}
 
-	//If this is a pod beeing deleted remove it from ALB
-	if pod.DeletionTimestamp != nil {
-		log.Info("received an Pod deletion", "name", pod.Name, "namespace", pod.Namespace)
-		ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
-		if len(ingress.IngressEndpoints) == 0 {
-			log.Info("pod does not have an ingress")
-			return nil
-		}
-		log.Info("deregistering", "name", pod.Name, "namespace", pod.Namespace, "ip", pod.Status.PodIP, "port", endpoint.Port)
-		err := r.CloudSDK.RemoveEndpoint(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
-		if err != nil {
-			log.Error(err, "could not remove endpoint")
-			return err
-		}
-		log.Info("pod Endpoint removed from AWS")
-		return nil
-	}
-
 	if !readinessGateEnabled(pod) {
 		log.Info("pod does not have readiness gates enabled.", "name", pod.Name, "namespace", pod.Namespace)
 		return nil
 	}
+
+	//If this is a pod beeing deleted remove it from ALB
+	// if pod.DeletionTimestamp != nil {
+	// 	log.Info("received an Pod deletion", "name"s, pod.Name, "namespace", pod.Namespace)
+	// 	ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
+	// 	if len(ingress.IngressEndpoints) == 0 {
+	// 		log.Info("pod does not have an ingress")
+	// 		return nil
+	// 	}
+	// 	// log.Info("deregistering", "name", pod.Name, "namespace", pod.Namespace, "ip", pod.Status.PodIP, "port", endpoint.Port)
+	// 	// err := r.CloudSDK.RemoveEndpoint(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
+	// 	// if err != nil {
+	// 	// 	log.Error(err, "could not remove endpoint")
+	// 	// 	return err
+	// 	// }
+	// 	// log.Info("pod Endpoint removed from AWS")
+	// 	return nil
+	// }
+
 	status, _ := readinessConditionStatus(pod)
 
 	// TODO: remove this as soon as we handle some different status than true
