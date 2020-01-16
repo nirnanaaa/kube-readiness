@@ -165,7 +165,7 @@ func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (e
 
 	endpoints, err := r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
 	if err != nil {
-		return errors.New("error fetching info from aws sdk")
+		return err
 	}
 	var tmp []cloud.EndpointGroup
 	for _, v := range endpoints {
