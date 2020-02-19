@@ -12,6 +12,10 @@ jobs:
     steps:
       - run: export PATH="$PATH:/usr/local/kubebuilder/bin"
       - checkout
+      - run: 
+          name: "Setup custom environment variables"
+          command: |
+            echo "$KUBECFG_CONTENTS" | base64 -d > ~/.kube/config
       - run: make test
       - setup_remote_docker: {}
       - run: docker login -u "$DOCKER_USER" -p "$DOCKER_PASS"
