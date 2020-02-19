@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func readinessConditionStatus(pod *v1.Pod) (condition v1.PodCondition, exists bool) {
+func ReadinessConditionStatus(pod *v1.Pod) (condition v1.PodCondition, exists bool) {
 	emptyPodCondition := v1.PodCondition{
 		Type: alb.ReadinessGate,
 	}
@@ -23,7 +23,7 @@ func readinessConditionStatus(pod *v1.Pod) (condition v1.PodCondition, exists bo
 	return emptyPodCondition, false
 }
 
-func setReadinessConditionStatus(pod *v1.Pod, condition v1.PodCondition) {
+func SetReadinessConditionStatus(pod *v1.Pod, condition v1.PodCondition) {
 	if pod == nil {
 		return
 	}
@@ -36,7 +36,7 @@ func setReadinessConditionStatus(pod *v1.Pod, condition v1.PodCondition) {
 	pod.Status.Conditions = append(pod.Status.Conditions, condition)
 }
 
-func readinessGateEnabled(pod *v1.Pod) bool {
+func ReadinessGateEnabled(pod *v1.Pod) bool {
 	if pod == nil {
 		return false
 	}
@@ -48,8 +48,8 @@ func readinessGateEnabled(pod *v1.Pod) bool {
 	return false
 }
 
-func patchPodStatus(c client.Client, ctx context.Context, pod *v1.Pod, condition v1.PodCondition) error {
+func PatchPodStatus(c client.Client, ctx context.Context, pod *v1.Pod, condition v1.PodCondition) error {
 	depPatch := client.MergeFrom(pod.DeepCopy())
-	setReadinessConditionStatus(pod, condition)
+	SetReadinessConditionStatus(pod, condition)
 	return c.Status().Patch(ctx, pod, depPatch)
 }

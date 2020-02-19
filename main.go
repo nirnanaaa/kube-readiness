@@ -86,9 +86,10 @@ func main() {
 	controller.CloudSDK = awsSdk
 
 	if err = (&controllers.PodReconciler{
-		Client:              mgr.GetClient(),
-		ReadinessController: controller,
-		Log:                 ctrl.Log.WithName("controllers").WithName("Pod"),
+		Client:         mgr.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("Pod"),
+		EndpointPodMap: &controller.EndpointPodMap,
+		IngressSet:     &controller.IngressSet,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)

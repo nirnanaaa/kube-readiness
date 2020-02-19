@@ -37,9 +37,9 @@ type Controller struct {
 	EndpointPodMap EndpointPodMap
 	IngressSet     IngressSet
 	ingressQueue   workqueue.RateLimitingInterface
-	podQueue       workqueue.RateLimitingInterface
-	CloudSDK       cloud.SDK
-	KubeSDK        client.Client
+	// podQueue       workqueue.RateLimitingInterface
+	CloudSDK cloud.SDK
+	KubeSDK  client.Client
 }
 
 func NewController(kube client.Client) *Controller {
@@ -47,8 +47,8 @@ func NewController(kube client.Client) *Controller {
 	//Potentialy if it sends to fast and alb-ingress-controller is to slow it might miss the info of hostname
 	slowRateLimiter := workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, 1000*time.Second)
 	return &Controller{
-		ingressQueue:   workqueue.NewRateLimitingQueue(slowRateLimiter),
-		podQueue:       workqueue.NewRateLimitingQueue(slowRateLimiter),
+		ingressQueue: workqueue.NewRateLimitingQueue(slowRateLimiter),
+		// podQueue:       workqueue.NewRateLimitingQueue(slowRateLimiter),
 		EndpointPodMap: make(EndpointPodMap),
 		IngressSet:     make(IngressSet),
 		KubeSDK:        kube,
@@ -56,10 +56,10 @@ func NewController(kube client.Client) *Controller {
 }
 
 func (r *Controller) Run(stopCh <-chan struct{}) {
-	defer r.podQueue.ShutDown()
+	// defer r.podQueue.ShutDown()
 	defer r.ingressQueue.ShutDown()
 	go wait.Until(r.ingressWorker, time.Second, stopCh)
-	go wait.Until(r.podWorker, time.Second, stopCh)
+	// go wait.Until(r.podWorker, time.Second, stopCh)
 	<-stopCh
 }
 
