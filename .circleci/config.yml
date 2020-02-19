@@ -15,6 +15,7 @@ jobs:
       - run: 
           name: "Setup custom environment variables"
           command: |
+            mkdir -p ~/.kube;
             echo "$KUBECFG_CONTENTS" | base64 -d > ~/.kube/config
       - run: make test
       - setup_remote_docker: {}
