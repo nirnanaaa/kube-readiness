@@ -10,7 +10,6 @@ import (
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -35,23 +34,23 @@ type Message struct {
 type Controller struct {
 	Log            logr.Logger
 	EndpointPodMap EndpointPodMap
-	IngressSet     IngressSet
-	ingressQueue   workqueue.RateLimitingInterface
+	// IngressSet     IngressSet
+	ingressQueue workqueue.RateLimitingInterface
 	// podQueue       workqueue.RateLimitingInterface
 	CloudSDK cloud.SDK
 	KubeSDK  client.Client
 }
 
-func NewController(kube client.Client) *Controller {
+func NewController(kube client.Client, endpointPodMap EndpointPodMap) *Controller {
 	//TODO: When things fail NewRateLimitingQueue resends rather quickly, what do we do about that?
 	//Potentialy if it sends to fast and alb-ingress-controller is to slow it might miss the info of hostname
 	slowRateLimiter := workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, 1000*time.Second)
 	return &Controller{
 		ingressQueue: workqueue.NewRateLimitingQueue(slowRateLimiter),
 		// podQueue:       workqueue.NewRateLimitingQueue(slowRateLimiter),
-		EndpointPodMap: make(EndpointPodMap),
-		IngressSet:     make(IngressSet),
-		KubeSDK:        kube,
+		EndpointPodMap: endpointPodMap,
+		// IngressSet:     ingressSet,
+		KubeSDK: kube,
 	}
 }
 
@@ -103,78 +102,80 @@ func (r *Controller) SyncIngress(ing types.NamespacedName) {
 // query AWS for that ingress with namespacedName %s, processing is done asynchronously
 // after it new into should be added to r.IngressSet / r.EndpointPodMap
 func (r *Controller) syncIngressInternal(namespacedName types.NamespacedName) (err error) {
-	ctx := context.Background()
-	ingress := &extensionsv1beta1.Ingress{}
-	if err := r.KubeSDK.Get(ctx, namespacedName, ingress); err != nil {
-		if apierrors.IsNotFound(err) {
-			r.IngressSet.Remove(namespacedName)
-			return nil
-		}
-		// Error reading the object - requeue the request.
-		return err
-	}
-	log := r.Log.WithValues("ingress", namespacedName.String())
+	// ctx := context.Background()
+	// ingress := &extensionsv1beta1.Ingress{}
+	// if err := r.KubeSDK.Get(ctx, namespacedName, ingress); err != nil {
+	// 	if apierrors.IsNotFound(err) {
+	// 		return nil
+	// 	}
+	// 	// Error reading the object - requeue the request.
+	// 	return err
+	// }
+	// log := r.Log.WithValues("ingress", namespacedName.String())
 
-	ingressData := r.IngressSet.Ensure(namespacedName)
-	log.Info("extracing hostname")
+	// ingressData := r.IngressSet.Ensure(namespacedName)
+	// log.Info("extracing hostname from ingress")
 
-	hostname, err := extractHostname(ingress)
-	if err != nil {
-		return err
-	}
+	// hostname, err := extractHostname(ingress)
+	// if err != nil {
+	// 	return err
+	// }
+	// log.WithValues("hostname", hostname).Info("extracted hostname from ingress")
 
-	//Find all services for Ingress
-	if len(ingress.Spec.Rules) < 1 && ingress.Spec.Backend == nil {
-		return nil
-	}
-	serviceName, servicePort, err := r.collectIngressBackendService(ctx, ingress)
-	if err != nil {
-		if err == BackendNotFoundErr {
-			return nil
-		}
-		return err
-	}
+	// //Find all services for Ingress
+	// if len(ingress.Spec.Rules) < 1 && ingress.Spec.Backend == nil {
+	// 	log.Info("no rules found in backend spec")
+	// 	return nil
+	// }
+	// serviceName, servicePort, err := r.collectIngressBackendService(ctx, ingress)
+	// if err != nil {
+	// 	if err == BackendNotFoundErr {
+	// 		log.Info("ingress doesn't have a backend")
+	// 		return nil
+	// 	}
+	// 	return err
+	// }
 
-	//Find the endpoints for the service
-	serviceEndpoints := &corev1.Endpoints{}
-	svcKey := types.NamespacedName{
-		Namespace: namespacedName.Namespace,
-		Name:      serviceName,
-	}
-	if err := r.KubeSDK.Get(ctx, svcKey, serviceEndpoints); err != nil {
-		return err
-	}
-	for _, endpointSubset := range serviceEndpoints.Subsets {
-		portIdx, err := getPortFromEndpointIdxPortMap(servicePort, &endpointSubset)
-		if err != nil {
-			return err
-		}
-		for _, endpointAddress := range endpointSubset.Addresses {
-			ingressData.IngressEndpoints.Insert(IngressEndpoint{
-				IP:   endpointAddress.IP,
-				Port: endpointSubset.Ports[portIdx].Port,
-			})
-		}
-		for _, endpointAddress := range endpointSubset.NotReadyAddresses {
-			ingressData.IngressEndpoints.Insert(IngressEndpoint{
-				IP:   endpointAddress.IP,
-				Port: endpointSubset.Ports[portIdx].Port,
-			})
-		}
-	}
+	// //Find the endpoints for the service
+	// serviceEndpoints := &corev1.Endpoints{}
+	// svcKey := types.NamespacedName{
+	// 	Namespace: namespacedName.Namespace,
+	// 	Name:      serviceName,
+	// }
+	// if err := r.KubeSDK.Get(ctx, svcKey, serviceEndpoints); err != nil {
+	// 	return err
+	// }
+	// for _, endpointSubset := range serviceEndpoints.Subsets {
+	// 	portIdx, err := getPortFromEndpointIdxPortMap(servicePort, &endpointSubset)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	// for _, endpointAddress := range endpointSubset.Addresses {
+	// 	// 	ingressData.IngressEndpoints.Insert(IngressEndpoint{
+	// 	// 		IP:   endpointAddress.IP,
+	// 	// 		Port: endpointSubset.Ports[portIdx].Port,
+	// 	// 	})
+	// 	// }
+	// 	// for _, endpointAddress := range endpointSubset.NotReadyAddresses {
+	// 	// 	ingressData.IngressEndpoints.Insert(IngressEndpoint{
+	// 	// 		IP:   endpointAddress.IP,
+	// 	// 		Port: endpointSubset.Ports[portIdx].Port,
+	// 	// 	})
+	// 	// }
+	// }
 
-	endpoints, err := r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
-	if err != nil {
-		return err
-	}
-	var tmp []cloud.EndpointGroup
-	for _, v := range endpoints {
-		tmp = append(tmp, *v)
-	}
-	ingressData.LoadBalancer.Endpoints = tmp
-	ingressData.LoadBalancer.Hostname = hostname
+	// endpointsByHostname, err := r.CloudSDK.GetEndpointGroupsByHostname(context.Background(), hostname)
+	// if err != nil {
+	// 	return err
+	// }
+	// var endpointGroup []cloud.EndpointGroup
+	// for _, endpoint := range endpointsByHostname {
+	// 	endpointGroup = append(endpointGroup, *endpoint)
+	// }
+	// ingressData.LoadBalancer.Endpoints = endpointGroup
+	// ingressData.LoadBalancer.Hostname = hostname
 
-	r.IngressSet[namespacedName] = ingressData
+	// r.IngressSet[namespacedName] = ingressData
 	return
 }
 

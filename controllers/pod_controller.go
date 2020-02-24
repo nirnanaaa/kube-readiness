@@ -19,8 +19,10 @@ package controllers
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -37,10 +40,11 @@ var (
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
-	Log            logr.Logger
-	CloudSDK       cloud.SDK
-	EndpointPodMap *readiness.EndpointPodMap
-	IngressSet     *readiness.IngressSet
+	Log              logr.Logger
+	CloudSDK         cloud.SDK
+	EndpointPodMutex *sync.RWMutex
+	EndpointPodMap   readiness.EndpointPodMap
+	ServiceInfoMap   readiness.ServiceInfoMap
 }
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -58,43 +62,47 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
 	}
+
+	if pod.Status.PodIP == "" {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	r.writePodMapEndpoint(&pod, namespacedName)
 	if !readiness.ReadinessGateEnabled(&pod) {
 		return ctrl.Result{}, nil
 	}
 
 	status, _ := readiness.ReadinessConditionStatus(&pod)
 
-	if status.Status == corev1.ConditionTrue {
-		return ctrl.Result{}, nil
-	}
-
-	ingress, endpoint := r.IngressSet.FindByIP(pod.Status.PodIP)
-	// TODO
-	// fmt.Printf("%+v", r.IngressSet)
-	if len(ingress.IngressEndpoints) == 0 {
+	serviceInfo, err := r.ServiceInfoMap.GetServiceInfoForPod(req.NamespacedName)
+	if err != nil {
 		status.Status = corev1.ConditionUnknown
 		if err := readiness.PatchPodStatus(r, ctx, &pod, status); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, errors.New("pod has not been assigned to an ingress")
+		return ctrl.Result{Requeue: true}, nil
 	}
 
-	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, ingress.LoadBalancer.Endpoints, pod.Status.PodIP, endpoint.Port)
+	ports := getContainerPortsForPod(&pod)
+	healthy, err := r.CloudSDK.IsEndpointHealthy(ctx, serviceInfo.Endpoints, pod.Status.PodIP, ports)
 	if err != nil {
-		log.Error(err, "could not query target health")
 		return ctrl.Result{}, err
 	}
 
 	if !healthy {
 		log.Info("pod is not healthy, yet")
 		status.Status = corev1.ConditionFalse
+		status.LastProbeTime = metav1.Now()
 		if err := readiness.PatchPodStatus(r, ctx, &pod, status); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, PodNotReadyErr
+		return ctrl.Result{Requeue: true}, nil
 	}
-
+	if status.Status == corev1.ConditionTrue {
+		return ctrl.Result{}, nil
+	}
+	log.Info("pod transitioned to state ready")
 	status.Status = corev1.ConditionTrue
+	status.LastTransitionTime = metav1.Now()
 	return ctrl.Result{}, readiness.PatchPodStatus(r, ctx, &pod, status)
 }
 
@@ -102,4 +110,26 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
 		Complete(r)
+}
+
+func (r *PodReconciler) writePodMapEndpoint(pod *corev1.Pod, namespacedName types.NamespacedName) {
+	r.EndpointPodMutex.Lock()
+	for _, port := range getContainerPortsForPod(pod) {
+		endpoint := readiness.IngressEndpoint{
+			IP:   pod.Status.PodIP,
+			Port: port,
+		}
+		r.EndpointPodMap[endpoint] = namespacedName
+	}
+	r.EndpointPodMutex.Unlock()
+}
+
+func getContainerPortsForPod(pod *corev1.Pod) []int32 {
+	var ports []int32
+	for _, container := range pod.Spec.Containers {
+		for _, port := range container.Ports {
+			ports = append(ports, port.ContainerPort)
+		}
+	}
+	return ports
 }

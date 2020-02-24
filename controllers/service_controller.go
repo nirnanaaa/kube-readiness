@@ -18,8 +18,13 @@ package controllers
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,17 +34,41 @@ import (
 // ServiceReconciler reconciles a Service object
 type ServiceReconciler struct {
 	client.Client
-	Log logr.Logger
+	ServiceInfoMapMutex *sync.RWMutex
+	ServiceInfoMap      readiness.ServiceInfoMap
+	EndpointPodMap      readiness.EndpointPodMap
+	Log                 logr.Logger
+	Lock                *sync.RWMutex
 }
 
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 
 func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	ctx := context.Background()
 	_ = r.Log.WithValues("service", req.NamespacedName)
+	var service corev1.Service
+	if err := r.Get(ctx, req.NamespacedName, &service); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.ServiceInfoMap.Remove(req.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return ctrl.Result{}, err
+	}
+	var endpoints corev1.Endpoints
+	if err := r.Get(ctx, req.NamespacedName, &endpoints); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	// get pods for service
+	pods := r.getPodsForService(&endpoints)
+	serviceInfo, ok := r.ServiceInfoMap[req.NamespacedName]
+	if !ok {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	serviceInfo.Pods = pods
 
-	// your logic here
+	r.ServiceInfoMap.Add(req.NamespacedName, serviceInfo)
 
 	return ctrl.Result{}, nil
 }
@@ -48,4 +77,41 @@ func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Service{}).
 		Complete(r)
+}
+
+func (r *ServiceReconciler) getPodsForService(endpoints *corev1.Endpoints) []types.NamespacedName {
+	r.Lock.RLock()
+	defer r.Lock.RUnlock()
+	var podNames []types.NamespacedName
+	for _, endpointSubset := range endpoints.Subsets {
+		for _, port := range endpointSubset.Ports {
+			for _, address := range endpointSubset.NotReadyAddresses {
+				name, err := getPodFromEndpointMap(r.EndpointPodMap, address, port)
+				if err != nil {
+					continue
+				}
+				podNames = append(podNames, name)
+			}
+			for _, address := range endpointSubset.Addresses {
+				name, err := getPodFromEndpointMap(r.EndpointPodMap, address, port)
+				if err != nil {
+					continue
+				}
+				podNames = append(podNames, name)
+
+			}
+		}
+	}
+	return podNames
+}
+
+func getPodFromEndpointMap(endpointMap readiness.EndpointPodMap, address corev1.EndpointAddress, port corev1.EndpointPort) (podName types.NamespacedName, err error) {
+	endpoint := readiness.IngressEndpoint{
+		IP:   address.IP,
+		Port: port.Port,
+	}
+	if pod, ok := endpointMap[endpoint]; ok {
+		return pod, nil
+	}
+	return types.NamespacedName{}, errors.New("no pod for service found")
 }

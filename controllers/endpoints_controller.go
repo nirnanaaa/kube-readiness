@@ -18,8 +18,10 @@ package controllers
 
 import (
 	"context"
+	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,7 +31,10 @@ import (
 // EndpointsReconciler reconciles a Endpoints object
 type EndpointsReconciler struct {
 	client.Client
-	Log logr.Logger
+	EndpointPodMap    readiness.EndpointPodMap
+	EndpointPodMutex  *sync.RWMutex
+	ServiceReconciler *ServiceReconciler
+	Log               logr.Logger
 }
 
 // +kubebuilder:rbac:groups=core,resources=endpoints,verbs=get;list;watch;create;update;patch;delete
@@ -38,7 +43,7 @@ type EndpointsReconciler struct {
 func (r *EndpointsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("endpoints", req.NamespacedName)
-
+	r.ServiceReconciler.Reconcile(req)
 	// your logic here
 
 	return ctrl.Result{}, nil

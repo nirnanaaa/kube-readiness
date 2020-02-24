@@ -7,7 +7,7 @@ import (
 // SDK defines a common interface for cloud providers
 type SDK interface {
 	GetEndpointGroupsByHostname(context.Context, string) ([]*EndpointGroup, error)
-	IsEndpointHealthy(context.Context, []EndpointGroup, string, int32) (bool, error)
+	IsEndpointHealthy(context.Context, []*EndpointGroup, string, []int32) (bool, error)
 	RemoveEndpoint(context.Context, []EndpointGroup, string, int32) error
 }
 

@@ -119,16 +119,18 @@ func getNameFromHostname(hostname string) string {
 	return strings.ReplaceAll(noPrefix, "-"+tmp[len(tmp)-1], "")
 }
 
-func (c *Cloud) IsEndpointHealthy(ctx context.Context, groups []cloud.EndpointGroup, name string, port int32) (bool, error) {
+func (c *Cloud) IsEndpointHealthy(ctx context.Context, groups []*cloud.EndpointGroup, name string, ports []int32) (bool, error) {
 	for _, endpoint := range groups {
+		var targetInfo []*elbv2.TargetDescription
+		for _, port := range ports {
+			targetInfo = append(targetInfo, &elbv2.TargetDescription{
+				Id:   awssdk.String(name),
+				Port: awssdk.Int64(int64(port)),
+			})
+		}
 		out, err := c.elbv2.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
 			TargetGroupArn: awssdk.String(endpoint.Name),
-			Targets: []*elbv2.TargetDescription{
-				{
-					Id:   awssdk.String(name),
-					Port: awssdk.Int64(int64(port)),
-				},
-			},
+			Targets:        targetInfo,
 		})
 		if err != nil {
 			return false, err

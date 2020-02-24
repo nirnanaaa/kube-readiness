@@ -19,6 +19,7 @@ package controllers
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,7 +48,6 @@ var k8sClient client.Client
 var k8sManager ctrl.Manager
 var testEnv *envtest.Environment
 var endpointPodMap readiness.EndpointPodMap
-var ingressSet readiness.IngressSet
 var cloudsdk cloud.SDK
 var podReconciler *PodReconciler
 
@@ -61,7 +61,6 @@ func TestAPIs(t *testing.T) {
 
 var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
-	ingressSet = make(readiness.IngressSet)
 	cloudsdk = &cloud.Fake{}
 	endpointPodMap = make(readiness.EndpointPodMap)
 	By("bootstrapping test environment")
@@ -98,11 +97,12 @@ var _ = BeforeSuite(func(done Done) {
 
 	// +kubebuilder:scaffold:scheme
 	podReconciler = &PodReconciler{
-		Client:         k8sManager.GetClient(),
-		Log:            ctrl.Log.WithName("controllers").WithName("SecretScope"),
-		CloudSDK:       cloudsdk,
-		EndpointPodMap: &endpointPodMap,
-		IngressSet:     &ingressSet,
+		Client:           k8sManager.GetClient(),
+		Log:              ctrl.Log.WithName("controllers").WithName("SecretScope"),
+		CloudSDK:         cloudsdk,
+		EndpointPodMap:   endpointPodMap,
+		EndpointPodMutex: new(sync.RWMutex),
+		// IngressSet:       ingressSet,
 	}
 	err = (podReconciler).SetupWithManager(k8sManager)
 

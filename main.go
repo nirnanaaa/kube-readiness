@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/nirnanaaa/kube-readiness/controllers"
@@ -56,7 +57,7 @@ func main() {
 	var enableLeaderElection bool
 	//TODO: What is the proper time to resync all? Do we want to use same resync intervall for all?
 	syncPeriod := 1 * time.Minute
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "The address the metric endpoint binds to.")
 	flag.StringVar(&assumeRoleArn, "aws-assume-role-arn", "", "A role that should be assumed from aws.")
 	flag.StringVar(&region, "aws-region", "eu-west-1", "The AWS region to bind to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
@@ -75,54 +76,61 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
-	controller := readiness.NewController(mgr.GetClient())
-	controller.Log = ctrl.Log.WithName("controllers").WithName("Readiness")
+	endpointPodMap := make(readiness.EndpointPodMap)
 	awsSdk, err := aws.NewCloudSDK(region, assumeRoleArn)
 	if err != nil {
-		setupLog.Error(err, "unable to setup Cloud SDK", "componoent", "awsSDK")
+		setupLog.Error(err, "unable to setup Cloud SDK", "component", "awsSDK")
 		os.Exit(1)
 	}
-	controller.CloudSDK = awsSdk
+	endpointPodMutex := new(sync.RWMutex)
+	serviceInfoMutex := new(sync.RWMutex)
+	serviceInfoMap := make(readiness.ServiceInfoMap)
 
 	if err = (&controllers.PodReconciler{
-		Client:         mgr.GetClient(),
-		Log:            ctrl.Log.WithName("controllers").WithName("Pod"),
-		EndpointPodMap: &controller.EndpointPodMap,
-		IngressSet:     &controller.IngressSet,
+		Client:           mgr.GetClient(),
+		Log:              ctrl.Log.WithName("controllers").WithName("Pod"),
+		EndpointPodMap:   endpointPodMap,
+		EndpointPodMutex: endpointPodMutex,
+		ServiceInfoMap:   serviceInfoMap,
+		CloudSDK:         awsSdk,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)
 	}
-
-	if err = (&controllers.ServiceReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Service"),
-	}).SetupWithManager(mgr); err != nil {
+	serviceReconciler := &controllers.ServiceReconciler{
+		Client:              mgr.GetClient(),
+		ServiceInfoMap:      serviceInfoMap,
+		EndpointPodMap:      endpointPodMap,
+		Lock:                endpointPodMutex,
+		ServiceInfoMapMutex: serviceInfoMutex,
+		Log:                 ctrl.Log.WithName("controllers").WithName("Service"),
+	}
+	if err = (serviceReconciler).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
 	}
 	if err = (&controllers.IngressReconciler{
+		CloudSDK:            awsSdk,
 		Client:              mgr.GetClient(),
-		ReadinessController: controller,
+		ServiceInfoMap:      serviceInfoMap,
+		ServiceInfoMapMutex: serviceInfoMutex,
+		ServiceReconciler:   serviceReconciler,
 		Log:                 ctrl.Log.WithName("controllers").WithName("Ingress"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Ingress")
 		os.Exit(1)
 	}
 	if err = (&controllers.EndpointsReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Endpoints"),
+		Client:            mgr.GetClient(),
+		EndpointPodMap:    endpointPodMap,
+		ServiceReconciler: serviceReconciler,
+		EndpointPodMutex:  endpointPodMutex,
+		Log:               ctrl.Log.WithName("controllers").WithName("Endpoints"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Endpoints")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
-
-	setupLog.Info("starting external controllers")
-	closeCh := make(chan struct{})
-	go controller.Run(closeCh)
-	defer func() { closeCh <- struct{}{} }()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

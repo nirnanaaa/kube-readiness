@@ -6,7 +6,7 @@ import (
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 )
 
-func extractHostname(ingress *extensionsv1beta1.Ingress) (string, error) {
+func ExtractHostname(ingress *extensionsv1beta1.Ingress) (string, error) {
 	lbStatus := ingress.Status.LoadBalancer.Ingress
 	if len(lbStatus) < 1 {
 		return "", errors.New("ingress not ready, yet. requeue")

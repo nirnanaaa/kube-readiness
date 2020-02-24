@@ -1,6 +1,8 @@
 package readiness
 
 import (
+	"errors"
+
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -9,73 +11,37 @@ import (
 type IngressEndpoint struct {
 	IP   string
 	Port int32
-	Node string
 }
 
 type EndpointPodMap map[IngressEndpoint]types.NamespacedName
 
-// IngressSet maps an ingress to endpoints
-type IngressSet map[types.NamespacedName]IngressData
+// ServiceInfoMap stores a service and its ingressdata
+type ServiceInfoMap map[types.NamespacedName]IngressInfo
 
-type IngressData struct {
-	IngressEndpoints IngressEndpointSet
-	LoadBalancer     LoadBalancerData
+type IngressInfo struct {
+	Name      string
+	Endpoints []*cloud.EndpointGroup
+	Pods      []types.NamespacedName
 }
 
-type LoadBalancerData struct {
-	//TODO: Should we store the hostname or the name(arn) of the ALB here?
-	Hostname  string
-	Endpoints []cloud.EndpointGroup
-}
-
-func (i IngressSet) Ensure(name types.NamespacedName) IngressData {
-	if _, ok := i[name]; !ok {
-		i[name] = IngressData{IngressEndpointSet{}, LoadBalancerData{}}
-	}
-	return i[name]
-}
-
-func (i IngressSet) Remove(names ...types.NamespacedName) {
-	for _, item := range names {
-		delete(i, item)
-	}
-}
-
-func (i IngressSet) FindByIP(ip string) (IngressData, IngressEndpoint) {
+func (i ServiceInfoMap) GetServiceInfoForPod(name types.NamespacedName) (*IngressInfo, error) {
 	for _, item := range i {
-		for endpoint := range item.IngressEndpoints {
-			if endpoint.IP == ip {
-				return item, endpoint
+		for _, podName := range item.Pods {
+			if podName == name {
+				return &item, nil
 			}
 		}
 	}
-	return IngressData{IngressEndpointSet{}, LoadBalancerData{}}, IngressEndpoint{}
+	return nil, errors.New("could not find serviceinfo for pod name")
 }
 
-// IngressEndpointSet maps pods to ingresses
-type IngressEndpointSet map[IngressEndpoint]struct{}
-
-// Insert adds items to the set.
-func (i IngressEndpointSet) Insert(items ...IngressEndpoint) {
-	for _, item := range items {
-		i[item] = struct{}{}
-	}
+func (i ServiceInfoMap) Add(name types.NamespacedName, info IngressInfo) IngressInfo {
+	i[name] = info
+	return i[name]
 }
 
-// Has returns true if and only if item is contained in the set.
-func (i IngressEndpointSet) Has(item IngressEndpoint) bool {
-	_, contained := i[item]
-	return contained
-}
-
-// Delete removes all items from the set.
-func (i IngressEndpointSet) Delete(items ...IngressEndpoint) {
-	for _, item := range items {
+func (i ServiceInfoMap) Remove(names ...types.NamespacedName) {
+	for _, item := range names {
 		delete(i, item)
 	}
-}
-
-// Len returns the size of the set.
-func (i IngressEndpointSet) Len() int {
-	return len(i)
 }
