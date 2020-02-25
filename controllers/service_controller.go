@@ -62,6 +62,8 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	// get pods for service
 	pods := r.getPodsForService(&endpoints)
+	r.ServiceInfoMapMutex.RLock()
+	defer r.ServiceInfoMapMutex.RUnlock()
 	serviceInfo, ok := r.ServiceInfoMap[req.NamespacedName]
 	if !ok {
 		return ctrl.Result{Requeue: true}, nil
