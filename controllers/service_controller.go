@@ -50,6 +50,8 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var service corev1.Service
 	if err := r.Get(ctx, req.NamespacedName, &service); err != nil {
 		if apierrors.IsNotFound(err) {
+			r.ServiceInfoMapMutex.Lock()
+			defer r.ServiceInfoMapMutex.Unlock()
 			r.ServiceInfoMap.Remove(req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
@@ -62,8 +64,8 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	// get pods for service
 	pods := r.getPodsForService(&endpoints)
-	r.ServiceInfoMapMutex.RLock()
-	defer r.ServiceInfoMapMutex.RUnlock()
+	r.ServiceInfoMapMutex.Lock()
+	defer r.ServiceInfoMapMutex.Unlock()
 	serviceInfo, ok := r.ServiceInfoMap[req.NamespacedName]
 	if !ok {
 		return ctrl.Result{Requeue: true}, nil

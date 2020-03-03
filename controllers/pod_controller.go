@@ -40,11 +40,12 @@ var (
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
-	Log              logr.Logger
-	CloudSDK         cloud.SDK
-	EndpointPodMutex *sync.RWMutex
-	EndpointPodMap   readiness.EndpointPodMap
-	ServiceInfoMap   readiness.ServiceInfoMap
+	Log                 logr.Logger
+	CloudSDK            cloud.SDK
+	EndpointPodMutex    *sync.RWMutex
+	ServiceInfoMapMutex *sync.RWMutex
+	EndpointPodMap      readiness.EndpointPodMap
+	ServiceInfoMap      readiness.ServiceInfoMap
 }
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -72,7 +73,8 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	status, _ := readiness.ReadinessConditionStatus(&pod)
-
+	r.ServiceInfoMapMutex.Lock()
+	defer r.ServiceInfoMapMutex.Unlock()
 	serviceInfo, err := r.ServiceInfoMap.GetServiceInfoForPod(req.NamespacedName)
 	if err != nil {
 		status.Status = corev1.ConditionUnknown
