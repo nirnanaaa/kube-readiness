@@ -87,12 +87,13 @@ func main() {
 	serviceInfoMap := make(readiness.ServiceInfoMap)
 
 	if err = (&controllers.PodReconciler{
-		Client:           mgr.GetClient(),
-		Log:              ctrl.Log.WithName("controllers").WithName("Pod"),
-		EndpointPodMap:   endpointPodMap,
-		EndpointPodMutex: endpointPodMutex,
-		ServiceInfoMap:   serviceInfoMap,
-		CloudSDK:         awsSdk,
+		Client:              mgr.GetClient(),
+		Log:                 ctrl.Log.WithName("controllers").WithName("Pod"),
+		EndpointPodMap:      endpointPodMap,
+		EndpointPodMutex:    endpointPodMutex,
+		ServiceInfoMap:      serviceInfoMap,
+		ServiceInfoMapMutex: serviceInfoMutex,
+		CloudSDK:            awsSdk,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)
