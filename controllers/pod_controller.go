@@ -29,7 +29,6 @@ import (
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -57,13 +56,12 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	namespacedName := req.NamespacedName
 	var pod corev1.Pod
 	if err := r.Get(ctx, namespacedName, &pod); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
+	if pod.DeletionTimestamp != nil {
+		log.Info("pod is in deletion, not reconciling")
+		return ctrl.Result{}, nil
+	}
 	if pod.Status.PodIP == "" {
 		return ctrl.Result{Requeue: true}, nil
 	}
