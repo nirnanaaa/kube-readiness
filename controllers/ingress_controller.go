@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/nirnanaaa/kube-readiness/controllers/utils"
@@ -38,7 +37,6 @@ type IngressReconciler struct {
 	client.Client
 	CloudSDK            cloud.SDK
 	Log                 logr.Logger
-	ReadinessController *readiness.Controller
 	ServiceInfoMapMutex *sync.RWMutex
 	ServiceInfoMap      readiness.ServiceInfoMap
 	ServiceReconciler   *ServiceReconciler
@@ -48,7 +46,7 @@ type IngressReconciler struct {
 // +kubebuilder:rbac:groups=extensions,resources=ingresses/status,verbs=get;update;patch
 
 func (r *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("ingress", req.NamespacedName)
+	log := r.Log.WithValues("ingress", req.NamespacedName)
 	ctx := context.Background()
 	var ingress extensionsv1beta1.Ingress
 	if err := r.Get(ctx, req.NamespacedName, &ingress); err != nil {
@@ -58,6 +56,7 @@ func (r *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
 	}
+	log.V(5).Info("start evaluating ingress")
 	hostname, err := readiness.ExtractHostname(&ingress)
 	if err != nil {
 		return ctrl.Result{Requeue: true}, nil
@@ -85,7 +84,7 @@ func (r *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		})
 		return false
 	})
-	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	return ctrl.Result{}, nil
 }
 
 func (r *IngressReconciler) SetupWithManager(mgr ctrl.Manager) error {

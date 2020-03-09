@@ -55,16 +55,20 @@ func main() {
 	var region string
 	var assumeRoleArn string
 	var enableLeaderElection bool
-	//TODO: What is the proper time to resync all? Do we want to use same resync intervall for all?
+	var debug bool
+
 	syncPeriod := 1 * time.Minute
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "The address the metric endpoint binds to.")
 	flag.StringVar(&assumeRoleArn, "aws-assume-role-arn", "", "A role that should be assumed from aws.")
 	flag.StringVar(&region, "aws-region", "eu-west-1", "The AWS region to bind to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&debug, "debug", false,
+		"Enable debug logging.")
 	flag.Parse()
 
-	ctrl.SetLogger(zap.Logger(false))
+	ctrl.SetLogger(zap.Logger(debug))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,

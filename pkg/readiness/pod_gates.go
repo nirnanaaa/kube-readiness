@@ -2,9 +2,11 @@ package readiness
 
 import (
 	"context"
+	"errors"
 
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness/alb"
 	v1 "k8s.io/api/core/v1"
+	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -52,4 +54,13 @@ func PatchPodStatus(c client.Client, ctx context.Context, pod *v1.Pod, condition
 	depPatch := client.MergeFrom(pod.DeepCopy())
 	SetReadinessConditionStatus(pod, condition)
 	return c.Status().Patch(ctx, pod, depPatch)
+}
+
+func ExtractHostname(ingress *extensionsv1beta1.Ingress) (string, error) {
+	lbStatus := ingress.Status.LoadBalancer.Ingress
+	if len(lbStatus) < 1 {
+		return "", errors.New("ingress does not have a status")
+	}
+	//TODO: ingress.Status.LoadBalancer.Ingress is a list, how many can we have? which one to use?
+	return ingress.Status.LoadBalancer.Ingress[0].Hostname, nil
 }

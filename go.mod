@@ -1,10 +1,9 @@
 module github.com/nirnanaaa/kube-readiness
 
-go 1.12
+go 1.13
 
 require (
 	github.com/aws/aws-sdk-go v1.23.4
-	github.com/davecgh/go-spew v1.1.1
 	github.com/go-chi/chi v4.0.2+incompatible // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/gorilla/mux v1.7.3 // indirect
