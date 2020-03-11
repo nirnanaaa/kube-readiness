@@ -5,14 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
 	awserr "github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elbv2"
+	"github.com/go-logr/logr"
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
+	"github.com/ticketmaster/aws-sdk-go-cache/cache"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 // SDK implements an
@@ -20,24 +25,64 @@ type Cloud struct {
 	session *session.Session
 	config  *awssdk.Config
 	ec2     *ec2.EC2
+	log     logr.Logger
 	elbv2   *elbv2.ELBV2
 }
 
-func NewCloudSDK(region string, assumeRoleArn string) (sdk cloud.SDK, err error) {
+func NewCloudSDK(region string, assumeRoleArn string, log logr.Logger, cacheEnabled bool) (sdk cloud.SDK, err error) {
+	logger := log.WithValues("sdk", "aws")
 	sess, err := session.NewSession()
 	if err != nil {
 		return
 	}
 	awsConfig := awssdk.NewConfig().WithRegion(region)
 
+	if cacheEnabled {
+		logger.Info("starting up sdk cache")
+		cc := cache.NewConfig(30 * time.Second)
+		cc.SetCacheTTL(elbv2.ServiceName, "DescribeLoadBalancers", time.Minute)
+		cc.SetCacheTTL(elbv2.ServiceName, "DescribeTargetHealth", 10*time.Second)
+		cache.AddCaching(sess, cc)
+		metrics.Registry.MustRegister(cc.NewCacheCollector("aws_cache"))
+	}
+
 	if assumeRoleArn != "" {
 		creds := stscreds.NewCredentials(sess, assumeRoleArn)
 		awsConfig.Credentials = creds
 	}
+
+	sess.Handlers.Send.PushFront(func(r *request.Request) {
+		if !logger.V(4).Enabled() {
+			return
+		}
+		logger.V(4).Info("request received", "service", r.ClientInfo.ServiceName, "operation", r.Operation.Name, "params", r.Params)
+	})
+
+	sess.Handlers.Complete.PushFront(func(r *request.Request) {
+		if r.Error != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				case "LimitExceededException":
+					throttledApiRequests.Inc()
+				default:
+					failedApiRequests.Inc()
+				}
+			}
+			if !logger.V(4).Enabled() {
+				logger.V(4).Info("response", "service", r.ClientInfo.ServiceName, "operation", r.Operation.Name, "params", r.Params, "error", r.Error)
+			}
+		} else {
+			successfulApiRequests.Inc()
+			if logger.V(4).Enabled() {
+				logger.V(4).Info("response", "service", r.ClientInfo.ServiceName, "operation", r.Operation.Name, "data", r.Data)
+			}
+		}
+	})
 	sdk = &Cloud{
 		session: sess,
 		config:  awsConfig,
 		ec2:     ec2.New(sess, awsConfig),
+		log:     logger,
 		elbv2:   elbv2.New(sess, awsConfig),
 	}
 	return sdk, nil

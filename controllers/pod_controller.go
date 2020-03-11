@@ -59,7 +59,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if pod.DeletionTimestamp != nil {
-		log.Info("pod is in deletion, not reconciling")
+		log.V(4).Info("pod is in deletion, not reconciling")
 		return ctrl.Result{}, nil
 	}
 	if pod.Status.PodIP == "" {

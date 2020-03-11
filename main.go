@@ -55,6 +55,7 @@ func main() {
 	var region string
 	var assumeRoleArn string
 	var enableLeaderElection bool
+	var sdkCache bool
 	var debug bool
 
 	syncPeriod := 1 * time.Minute
@@ -66,6 +67,8 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
+	flag.BoolVar(&sdkCache, "sdk-cache", false,
+		"enable the sdk cache (supported: AWS).")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.Logger(debug))
@@ -81,7 +84,7 @@ func main() {
 		os.Exit(1)
 	}
 	endpointPodMap := make(readiness.EndpointPodMap)
-	awsSdk, err := aws.NewCloudSDK(region, assumeRoleArn)
+	awsSdk, err := aws.NewCloudSDK(region, assumeRoleArn, ctrl.Log.WithName("sdk").WithName("aws"), sdkCache)
 	if err != nil {
 		setupLog.Error(err, "unable to setup Cloud SDK", "component", "awsSDK")
 		os.Exit(1)
