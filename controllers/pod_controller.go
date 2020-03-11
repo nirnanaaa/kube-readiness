@@ -71,6 +71,10 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	status, _ := readiness.ReadinessConditionStatus(&pod)
+
+	if status.Status == corev1.ConditionTrue {
+		return ctrl.Result{}, nil
+	}
 	r.ServiceInfoMapMutex.Lock()
 	defer r.ServiceInfoMapMutex.Unlock()
 	serviceInfo, err := r.ServiceInfoMap.GetServiceInfoForPod(req.NamespacedName)
@@ -96,9 +100,6 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
-	}
-	if status.Status == corev1.ConditionTrue {
-		return ctrl.Result{}, nil
 	}
 	log.Info("pod transitioned to state ready")
 	status.Status = corev1.ConditionTrue
