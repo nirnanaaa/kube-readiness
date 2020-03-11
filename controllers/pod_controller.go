@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/nirnanaaa/kube-readiness/pkg/cloud"
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
@@ -110,6 +111,9 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 20,
+		}).
 		Complete(r)
 }
 
