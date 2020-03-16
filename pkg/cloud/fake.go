@@ -1,9 +1,11 @@
 package cloud
 
-import "context"
+import (
+	"context"
+)
 
 type Fake struct {
-	Healthy *bool
+	Unhealthy bool
 }
 
 func (c *Fake) GetEndpointGroupsByHostname(context.Context, string) (groups []*EndpointGroup, err error) {
@@ -15,8 +17,8 @@ func (c *Fake) GetLoadBalancerByHostname(ctx context.Context, name string) (lb *
 }
 
 func (c *Fake) IsEndpointHealthy(ctx context.Context, groups []*EndpointGroup, name string, port []int32) (b bool, err error) {
-	if c.Healthy != nil {
-		return *c.Healthy, nil
+	if c.Unhealthy {
+		return false, nil
 	}
 	return true, nil
 }

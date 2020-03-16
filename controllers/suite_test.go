@@ -27,6 +27,7 @@ import (
 	"github.com/nirnanaaa/kube-readiness/pkg/readiness"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
@@ -48,8 +49,13 @@ var k8sClient client.Client
 var k8sManager ctrl.Manager
 var testEnv *envtest.Environment
 var endpointPodMap readiness.EndpointPodMap
-var cloudsdk cloud.SDK
+var serviceInfoMap readiness.ServiceInfoMap
+var cloudsdk *cloud.Fake
 var podReconciler *PodReconciler
+var serviceReconciler *ServiceReconciler
+var endpointsReconciler *EndpointsReconciler
+var ingressReconciler *IngressReconciler
+var responseDataMap map[string]bool
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -61,8 +67,11 @@ func TestAPIs(t *testing.T) {
 
 var _ = BeforeSuite(func(done Done) {
 	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+
 	cloudsdk = &cloud.Fake{}
 	endpointPodMap = make(readiness.EndpointPodMap)
+	serviceInfoMap = make(readiness.ServiceInfoMap)
+
 	By("bootstrapping test environment")
 	t := true
 	if os.Getenv("TEST_USE_EXISTING_CLUSTER") == "true" {
@@ -73,7 +82,6 @@ var _ = BeforeSuite(func(done Done) {
 		testEnv = &envtest.Environment{
 			CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
 		}
-		testEnv.AttachControlPlaneOutput = true
 		testEnv.ControlPlaneStartTimeout = 20 * time.Second
 	}
 
@@ -88,21 +96,54 @@ var _ = BeforeSuite(func(done Done) {
 	err = extensionsv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = corev1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
+	endpointLock := new(sync.RWMutex)
+	serviceLock := new(sync.RWMutex)
+
+	// +kubebuilder:scaffold:scheme
+
 	k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 	})
 	Expect(err).ToNot(HaveOccurred())
+	k8sClient = k8sManager.GetClient() //.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(k8sClient).ToNot(BeNil())
 
-	// +kubebuilder:scaffold:scheme
+	serviceReconciler = &ServiceReconciler{
+		Client:              k8sClient,
+		Log:                 ctrl.Log.WithName("controllers").WithName("ServiceScope"),
+		EndpointPodMap:      endpointPodMap,
+		Lock:                endpointLock,
+		ServiceInfoMap:      serviceInfoMap,
+		ServiceInfoMapMutex: serviceLock,
+	}
+	err = (serviceReconciler).SetupWithManager(k8sManager)
+
+	Expect(err).ToNot(HaveOccurred())
+
+	endpointsReconciler = &EndpointsReconciler{
+		Client:            k8sClient,
+		Log:               ctrl.Log.WithName("controllers").WithName("ServiceScope"),
+		ServiceReconciler: serviceReconciler,
+	}
+	err = (endpointsReconciler).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+	ingressReconciler = &IngressReconciler{
+		Client:              k8sClient,
+		Log:                 ctrl.Log.WithName("controllers").WithName("ServiceScope"),
+		ServiceInfoMap:      serviceInfoMap,
+		ServiceInfoMapMutex: serviceLock,
+		ServiceReconciler:   serviceReconciler,
+	}
+	err = (ingressReconciler).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
 	podReconciler = &PodReconciler{
-		Client:           k8sManager.GetClient(),
-		Log:              ctrl.Log.WithName("controllers").WithName("SecretScope"),
-		CloudSDK:         cloudsdk,
-		EndpointPodMap:   endpointPodMap,
-		EndpointPodMutex: new(sync.RWMutex),
-		// IngressSet:       ingressSet,
+		Client:              k8sClient,
+		Log:                 ctrl.Log.WithName("controllers").WithName("PodScope"),
+		CloudSDK:            cloudsdk,
+		EndpointPodMap:      endpointPodMap,
+		EndpointPodMutex:    new(sync.RWMutex),
+		ServiceInfoMap:      serviceInfoMap,
+		ServiceInfoMapMutex: serviceLock,
 	}
 	err = (podReconciler).SetupWithManager(k8sManager)
 
@@ -113,14 +154,12 @@ var _ = BeforeSuite(func(done Done) {
 		Expect(err).ToNot(HaveOccurred())
 	}()
 
-	k8sClient = k8sManager.GetClient() //.New(cfg, client.Options{Scheme: scheme.Scheme})
-
-	Expect(k8sClient).ToNot(BeNil())
 	close(done)
 }, 60)
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
+	gexec.KillAndWait(5 * time.Second)
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })

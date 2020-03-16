@@ -71,11 +71,11 @@ func NewCloudSDK(region string, assumeRoleArn string, log logr.Logger, cacheEnab
 			if !logger.V(4).Enabled() {
 				logger.V(4).Info("response", "service", r.ClientInfo.ServiceName, "operation", r.Operation.Name, "params", r.Params, "error", r.Error)
 			}
-		} else {
-			successfulApiRequests.Inc()
-			if logger.V(4).Enabled() {
-				logger.V(4).Info("response", "service", r.ClientInfo.ServiceName, "operation", r.Operation.Name, "data", r.Data)
-			}
+			return
+		}
+		successfulApiRequests.Inc()
+		if logger.V(4).Enabled() {
+			logger.V(4).Info("response", "service", r.ClientInfo.ServiceName, "operation", r.Operation.Name, "data", r.Data)
 		}
 	})
 	sdk = &Cloud{

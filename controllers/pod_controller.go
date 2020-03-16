@@ -92,7 +92,6 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	if !healthy {
 		log.Info("pod is not healthy, yet")
 		status.Status = corev1.ConditionFalse
