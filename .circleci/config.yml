@@ -27,6 +27,12 @@ jobs:
 
 workflows:
   version: 2
-  build-deploy:
+  untagged-build:
     jobs:
       - build
+  tagged-build:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /^v.*/
