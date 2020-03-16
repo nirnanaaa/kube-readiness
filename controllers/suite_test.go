@@ -130,6 +130,7 @@ var _ = BeforeSuite(func(done Done) {
 	ingressReconciler = &IngressReconciler{
 		Client:              k8sClient,
 		Log:                 ctrl.Log.WithName("controllers").WithName("ServiceScope"),
+		CloudSDK:            cloudsdk,
 		ServiceInfoMap:      serviceInfoMap,
 		ServiceInfoMapMutex: serviceLock,
 		ServiceReconciler:   serviceReconciler,
