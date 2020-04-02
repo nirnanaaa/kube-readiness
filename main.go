@@ -54,6 +54,7 @@ func main() {
 	var metricsAddr string
 	var region string
 	var assumeRoleArn string
+	var namespace string
 	var enableLeaderElection bool
 	var sdkCache bool
 	var debug bool
@@ -63,6 +64,7 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "The address the metric endpoint binds to.")
 	flag.StringVar(&assumeRoleArn, "aws-assume-role-arn", "", "A role that should be assumed from aws.")
 	flag.StringVar(&region, "aws-region", "eu-west-1", "The AWS region to bind to.")
+	flag.StringVar(&namespace, "namespace", "", "Namespace to listen on")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&debug, "debug", false,
@@ -78,6 +80,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		SyncPeriod:         &syncPeriod,
+		Namespace:          namespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
